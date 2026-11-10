@@ -18,11 +18,12 @@ All answered; see `PLAN.md`.
 - [x] Base price file format (Lua) and loader, with tests.
 - [x] Price files split into `prices/games/` and `prices/mods/`, seeded for Minetest Game and Technic.
 - [ ] After the collector exists, run the derivation on the real recipes and add anchors for items that are still unpriced (cycles, items only made by skipped recipes).
-- [ ] Decide prices for Ethereal, Everness, Techage and other content mods (currently unpriced).
+- [ ] Decide prices for Ethereal, Everness, Techage and other content mods (currently unpriced). Techage chips and aluminium block the most recipes; the empty bucket needs `techage:iron_ingot`.
+- [ ] Torches come out at 0.56 each because the cheapest member of group `charcoal` (priced 2) beats coal (8). Decide if group pricing needs a rule (for example ignore groups wider than N members).
 - [ ] Add price files for the other games (`mineclonia`, `mineclone2`) when you want to support them.
 - [x] Run the derivation on the real recipes (51-mod world): 410 priced, no unstable loops.
 - [ ] Review the 410 derived prices for odd values (for example Technic dusts and machine-made items).
-- [ ] Anchors for natural items: clay lump, cactus, papyrus, ice, snow, obsidian, wheat, cotton, string. Needs your price values.
+- [x] Anchors for natural items (clay lump, cactus, papyrus, ice, snow, obsidian, flint, wheat, cotton, stairs-only cobbles).
 - [ ] Document the flags and the price hook for other mod authors in `README.md`.
 
 - [x] Write the currency adapter layer (`currency`, `unified_money`, `credits`, `items` behind one interface).

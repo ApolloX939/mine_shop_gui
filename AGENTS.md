@@ -47,6 +47,7 @@ locale/         # optional: translation files
   ```
   luanti.exe --server --world <world> --gameid minetest --config <conf> --logfile <log>
   ```
+- Run the tests in two worlds. The small one (Minetest Game plus the mods listed above) skips the Technic tests. The Technic ones need a second world with `technic`, `ethereal`, `everness`, `3d_armor`, `pipeworks`, `techage_modpack`, `xcompat`, `unified_inventory`, `currency`, `credits`, `mtt`, `mine_shop_gui`, plus `unified_money/um_core` and `unified_money/um_backend_plain` only. Modpacks cannot be enabled as one entry: list every mod inside them by its own path (`mods/technic/technic`, ...) and skip duplicates (`techage_modpack` ships its own `unified_inventory`). Both worlds must pass.
 - Account balances persist in the world between runs. Tests that touch a balance (`unified_money`, `credits`) must reset it at the start (see `reset_credits` in `mtt.lua`), so runs never depend on a clean world.
 - Only one version of `credits` can be present in a world, so the V1.2.3 code path (`credits_old`) is not covered by the automated tests.
 
