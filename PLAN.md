@@ -100,8 +100,24 @@ All three are optional dependencies, reached through one adapter interface.
 - Findings from dumping the installed content mods (51 mods, 4318 items): 618 items have no recipe at all. Most are Everness (275) and Ethereal (137), then Techage (89), default (66) and Technic (17).
 - Raw items alone are not enough. Items that can only be made inside a cycle (for example cobblestone <-> stone <-> mossy cobblestone) or only by a skipped multi-output recipe (dirt from Technic's separating) also need a base price, and cobblestone is the unit anchor. The derivation shows which items are still unpriced, so the seed list is built by running it and adding anchors until nothing important is missing.
 
+### Collector, flags and the price hook (decided and implemented)
+
+- **Collector** (`src/pricing/collect.lua`): reads `core.get_all_craft_recipes` (types `normal` and `cooking`) and Technic's machine recipes, skips multi-output recipes, merges repeated ingredients, resolves aliases, and lists the members of every group the recipes use. Output is sorted so ties always resolve the same way.
+- **Generation** (`src/pricing/generate.lua`): runs once on the first server step after all `on_mods_loaded` callbacks (so Technic's own recipe registration is done). Result: `mine_shop_gui.pricing.items[name] = {price, source, no_buy, no_sell}`. `source` is `base`, a recipe type, or `hook`.
+- **Markup:** `mine_shop_gui_markup_<type>` settings (percent, default 0) for `normal`, `cooking`, `alloy`, `grinding`, `compressing`, `extracting`, `freezing`.
+- **Flags `no_buy` / `no_sell`** can be set in two places:
+  - Item definition: `_mine_shop_gui = { no_buy = true, no_sell = true }`.
+  - Item metadata on a stack: key `no_buy` or `no_sell` set to `"true"`, `"yes"` or `"1"` (so `meta:set_string("no_sell", "true")` or `meta:set_int("no_sell", 1)`). **Metadata has no `set_bool`**; that method only exists on `Settings` objects. A stack flag stops that stack being sold; `no_buy` on a stack is read but nothing uses it yet, because the shop only sells new items.
+  - Mod-wide flags are set from the hook below, not from `mod.conf` or price files (decided).
+- **Chain rule (decided):** a derived item still gets a price but inherits the flags of every ingredient of the recipe that set its price (for a group ingredient, the member used), plus its own flags. Flags therefore follow the cheapest route.
+- **Hook (decided: whole table):** `mine_shop_gui.register_on_prices_generated(function(items) ... end)`. Register while mods load. Runs after the collector and derivation, in registration order, and edits `items` in place: change a price, remove an entry, add an entry, set `no_buy` / `no_sell`. Afterwards the table is checked: entries that are not tables, have a bad price, or name an unregistered item are dropped with a warning, and a hook that throws is skipped without stopping the others. A hook registered late runs immediately with a warning.
+- **Trade checks:** `pricing.get(name)`, `pricing.can_buy(name)` and `pricing.can_sell(stack)` (item flags and the stack's own metadata).
+
+### Result on the 51-mod test world
+
+2707 recipes read (2474 crafting, 104 smelting, 83 grinding, 17 compressing, 14 alloy, 14 extracting, 1 freezing). 410 items priced, no unstable loops. 1480 craftable items are still unpriced because something they need has no price: mostly stairs (464), Techage (263), Everness (197), Technic machines (182), Ethereal (158). Natural default items that need anchors are clay lump, cactus, papyrus, ice, snow, obsidian and the farming crops (wheat, cotton, string).
+
 ### Still to build
 
-- A collector that turns `core.get_all_craft_recipes` (types `normal`, `shapeless`, `cooking`) and `technic.recipes` into the recipe list, and builds group membership. It must run after technic's own `register_on_mods_loaded` callback.
-- The base price file and a seed list generated from the raw items in the installed mods.
-- Markup settings in `settingtypes.txt`.
+- Anchors for the natural items listed above, and prices for Ethereal, Everness, Techage and other content mods.
+- The shop GUI itself.

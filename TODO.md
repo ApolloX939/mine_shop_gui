@@ -14,14 +14,16 @@ All answered; see `PLAN.md`.
 ## Tasks
 
 - [x] Pricing derivation core (`src/pricing/derive.lua`) with tests.
-- [ ] Recipe collector: `core.get_all_craft_recipes` plus `technic.recipes`, single-output only, group membership, after technic's callback (add `technic` to `optional_depends`).
+- [x] Recipe collector, flags (`no_buy` / `no_sell`), markup settings and the whole-table price hook. See `PLAN.md`.
 - [x] Base price file format (Lua) and loader, with tests.
 - [x] Price files split into `prices/games/` and `prices/mods/`, seeded for Minetest Game and Technic.
 - [ ] After the collector exists, run the derivation on the real recipes and add anchors for items that are still unpriced (cycles, items only made by skipped recipes).
 - [ ] Decide prices for Ethereal, Everness, Techage and other content mods (currently unpriced).
 - [ ] Add price files for the other games (`mineclonia`, `mineclone2`) when you want to support them.
-- [ ] Markup settings per recipe type in `settingtypes.txt`.
-- [ ] Run the derivation on the real recipes and review the results for odd prices.
+- [x] Run the derivation on the real recipes (51-mod world): 410 priced, no unstable loops.
+- [ ] Review the 410 derived prices for odd values (for example Technic dusts and machine-made items).
+- [ ] Anchors for natural items: clay lump, cactus, papyrus, ice, snow, obsidian, wheat, cotton, string. Needs your price values.
+- [ ] Document the flags and the price hook for other mod authors in `README.md`.
 
 - [x] Write the currency adapter layer (`currency`, `unified_money`, `credits`, `items` behind one interface).
 - [x] Check Technic's recipe registration API for machine recipes. See `PLAN.md`.
