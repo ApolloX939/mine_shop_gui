@@ -176,16 +176,34 @@ Anchors for items that only come from uncrafting slabs and stairs: cobbles and p
 
 Result in the 51-mod world: all 198 craftable Everness items are priced, 1816 items overall, no unknown names, no unstable loops. With Technic installed, pyrite ingots cost half a lump (10) because of grinding, like the other metals.
 
-### Price inference (findings, not yet built)
+### Price inference (moved to version 2)
 
-Idea: instead of listing every raw item in a price file, infer a default price from what the game already knows about the item, and keep price files only as overrides. Tested offline on the 51-mod world against the 492 hand-set prices (the hand-set values are my own category choices, so agreement shows the categories compress well, not that the values are right):
+Inferring raw-item prices from item properties and ore rarity was tested and looks promising (about half of the hand-set prices are reproduced exactly by a handful of group rules). It is not part of version 1. The measurements, design and open questions are in `PLAN_V2.md`.
 
-- **Item-property rules** (groups such as `tree`, `sapling`, `leaves`, `soil`/`sand`, plants/flowers, food, stone-like nodes with no recipe): fire on 84% of the hand-set items. 253 (51%) match the hand-set price exactly, 324 (66%) are within a factor of 2. Per rule: leaves 38 of 38 exact, saplings 33 of 33, trees 29 of 30, soils 46 of 52. Weak: stone-like (11 of 74 exact) and food (9 of 35), because special cases hide inside them.
-- **What the rules cannot see:** rare materials and design intent (diamond, mese, gold, etherium, obsidian, golden apple), crystals and lanterns (light), deep-sea corals, fish tiers, and everything with no group at all (cobbles, clay, ice, snow, flint).
-- **Worldgen rarity for ores:** fitted on the 7 Minetest Game ores, `price = 2.09 * density^-0.74` (R2 = 0.68), where density is the sum of `clust_num_ores / clust_scarcity` over the ore's definitions. On ores not used in the fit it lands within a factor of 2 for lead (13.7 vs 14), zinc (17.6 vs 14), etherium (42 vs 40), uranium (46 vs 60) and chromium (31 vs 60), and misses quartz (55 vs 20) and pyrite (60 vs 20). It priced Techage's baborium lump (never hand-priced) at about 39. The density ignores depth and treats bulk or decorative spawns badly (ceramic sherds come out at 224, sand at its own tiny density), so it only suits lumps and crystals.
-- **Limits:** inference cannot price machine-made parts with no recipe (Techage chips, vacuum tubes), fishing or mob drops, or anything that is a design choice. It is only as good as the few hand-set anchors it is calibrated on.
-- **Proposed layering** (lowest priority first): inferred defaults, then `prices/` files as overrides, then the price hook. Each inferred entry keeps `source = "inferred:<rule>"` so it can be seen and filtered. Recipe derivation still runs on top of all of it.
-- **Expected effect:** deleting entries whose rule gives the same number would remove about 250 of the 492 lines with no price change. Refining a few rules (light, crystal and coral names, fish) could bring the overrides down to roughly 100.
+### Techage prices (drafted by Claude, open to adjustment)
+
+`prices/mods/techage.lua` prices 80 Techage items, plus `basic_materials:silver_wire` (6) and `compost:compost` (1). Techage's raw items are mostly made by its own machines with no craft recipe, so the prices are judgment calls that climb with the tech tier:
+
+| Group | Price |
+|---|---|
+| basics: charcoal, clay and cement powder, leaf and needle powder, gravel | 1 to 3 |
+| graphite powder, redmud, lye, nitrogen | 2 to 6 |
+| iron powder | 16 |
+| baborium lump | 40 (the ore-rarity estimate gave 39) |
+| usmium nuggets and powder | 60 |
+| aluminium and aluminium powder | 24 |
+| basalt glass | 4 to 10 |
+| oil products and gases | 4 to 12 |
+| TA3 electronics (vacuum tube, logic block) | 12 to 20 |
+| WLAN chip | 30 |
+| TA4 chips and ceramics | 10 to 40 |
+| TA5 parts | 100 to 250 |
+
+Anchors for items that Techage makes inside a machine or only gets by uncrafting: `techage:iron_ingot` 16 (it was the biggest blocker, 46 recipes, and unlocks the empty and water buckets), basalt cobble 1, red stone 2, bauxite cobble 1, basalt glass 4, sieved basalt gravel 1. Four filled containers that recipes need are priced (epoxy canister 12, lye canister 10, large hydrogen cylinder 40, bitumen barrel 20). Other filled containers, the three gravel sieve machines, admin and test blocks, oil sources and ore nodes stay unpriced.
+
+Result in the 51-mod world: 431 of 437 craftable items in the Techage modpack are priced, and 2215 items overall, with no unknown names and no unstable loops. The six left are the gravel sieves and the bauxite stone slabs and stairs.
+
+Techage has its own machine recipe system (grinder, furnace and similar), which the collector does not read. See `PLAN_V2.md`.
 
 ### Result on the 51-mod test world
 

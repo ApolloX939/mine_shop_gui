@@ -13,7 +13,7 @@ All answered; see `PLAN.md`.
 
 ## Tasks
 
-- [ ] Decide whether to build price inference (see `PLAN.md`, "Price inference"): rules by item properties, an ore-rarity estimate, and price files demoted to overrides.
+- [ ] Version 2: price inference is written up in `PLAN_V2.md` for consideration. Not scheduled.
 
 - [x] Pricing derivation core (`src/pricing/derive.lua`) with tests.
 - [x] Recipe collector, flags (`no_buy` / `no_sell`), markup settings and the whole-table price hook. See `PLAN.md`.
@@ -22,8 +22,10 @@ All answered; see `PLAN.md`.
 - [ ] After the collector exists, run the derivation on the real recipes and add anchors for items that are still unpriced (cycles, items only made by skipped recipes).
 - [x] Ethereal prices (`prices/mods/ethereal.lua`), drafted by Claude: review the values.
 - [x] Everness prices (`prices/mods/everness.lua`), drafted by Claude: review the values.
-- [ ] Decide prices for Techage and other content mods (currently unpriced). Techage chips and aluminium block the most recipes; the empty bucket needs `techage:iron_ingot`.
-- [ ] Price `techage:iron_ingot` (suggest 16, same as a steel ingot): it unlocks the empty bucket, the water bucket, and with them the Ethereal crystal chain, mud, quicksand and lemonade.
+- [x] Techage prices (`prices/mods/techage.lua`), drafted by Claude: review the values. Tiers climb about 3 to 4 times each.
+- [ ] Decide prices for other content mods that still have unpriced raw items (the leftover `default` items such as bush stems, 3d_armor, pipeworks, hyperloop, signs_bot, currency).
+- [ ] Price `techage:bauxite_stone` and its slabs, if you want them traded. Techage chips and aluminium block the most recipes; the empty bucket needs `techage:iron_ingot`.
+- [x] Price `techage:iron_ingot` at 16: this unlocked the empty and water buckets and the Ethereal crystal chain.
 - [ ] Torches come out at 0.56 each because the cheapest member of group `charcoal` (priced 2) beats coal (8). Decide if group pricing needs a rule (for example ignore groups wider than N members).
 - [ ] Add price files for the other games (`mineclonia`, `mineclone2`) when you want to support them.
 - [x] Run the derivation on the real recipes (51-mod world): 410 priced, no unstable loops.
