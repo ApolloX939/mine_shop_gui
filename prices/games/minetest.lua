@@ -62,6 +62,60 @@ return {
 	["flowers:mushroom_red"] = 2,
 	["flowers:waterlily"] = 2,
 
+	-- Bushes, grasses and soils
+	["default:acacia_bush_leaves"] = 1,
+	["default:blueberry_bush_leaves"] = 1,
+	["default:blueberry_bush_leaves_with_berries"] = 2,
+	["default:pine_bush_needles"] = 1,
+	["default:acacia_bush_stem"] = 2,
+	["default:bush_stem"] = 2,
+	["default:pine_bush_stem"] = 2,
+	["default:acacia_bush_sapling"] = 3,
+	["default:blueberry_bush_sapling"] = 3,
+	["default:bush_sapling"] = 3,
+	["default:pine_bush_sapling"] = 3,
+	["default:dry_grass_1"] = 1,
+	["default:dry_shrub"] = 1,
+	["default:fern_1"] = 1,
+	["default:grass_1"] = 1,
+	["default:junglegrass"] = 1,
+	["default:marram_grass_1"] = 1,
+	["default:sand_with_kelp"] = 1,
+	["default:dirt_with_grass"] = 1,
+	["default:dirt_with_dry_grass"] = 1,
+	["default:dirt_with_coniferous_litter"] = 1,
+	["default:dirt_with_rainforest_litter"] = 1,
+	["default:dry_dirt"] = 1,
+	["default:dry_dirt_with_dry_grass"] = 1,
+	["default:permafrost"] = 1,
+	["default:permafrost_with_moss"] = 1,
+	["default:permafrost_with_stones"] = 1,
+
+	-- Food and sea life
+	["default:apple"] = 2,
+	["default:blueberries"] = 2,
+	["default:coral_brown"] = 2,
+	["default:coral_cyan"] = 2,
+	["default:coral_green"] = 2,
+	["default:coral_orange"] = 2,
+	["default:coral_pink"] = 2,
+	["default:coral_skeleton"] = 2,
+
+	-- Seeds and wild crops
+	["farming:seed_wheat"] = 1,
+	["farming:seed_cotton"] = 1,
+	["farming:cotton_wild"] = 3,
+
+	-- Caught with a net
+	["butterflies:butterfly_red"] = 3,
+	["butterflies:butterfly_violet"] = 3,
+	["butterflies:butterfly_white"] = 3,
+	["fireflies:firefly"] = 3,
+
+	-- Filled buckets: an empty bucket (24) plus the contents
+	["bucket:bucket_river_water"] = 27,
+	["bucket:bucket_lava"] = 30,
+
 	-- Ore lumps (ingots are priced from these by smelting)
 	["default:copper_lump"] = 12,
 	["default:tin_lump"] = 12,

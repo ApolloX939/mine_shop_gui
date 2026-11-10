@@ -296,6 +296,10 @@ return {
 	["everness:volcanic_sulfur"] = 10,
 	["everness:weeping_obsidian"] = 40,
 
+	-- Filled buckets: an empty bucket (24) plus the contents
+	["everness:bucket_lava"] = 30,
+	["everness:bucket_mineral_water"] = 27,
+
 	-- Anchors: only made by uncrafting slabs and stairs (or in a loop), so a recipe cannot price them
 	["everness:coral_desert_cobble"] = 1,
 	["everness:coral_desert_mossy_cobble"] = 1,

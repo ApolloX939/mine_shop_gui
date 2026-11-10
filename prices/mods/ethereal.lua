@@ -155,6 +155,13 @@ return {
 	["ethereal:blue_marble"] = 3,
 	["ethereal:banana"] = 2,
 
+	-- Baked clay: Ethereal registers these itself when the bakedclay mod is absent
+	-- (the same prices are in prices/mods/bakedclay.lua for when it is present)
+	["bakedclay:brown"] = 2,
+	["bakedclay:grey"] = 2,
+	["bakedclay:orange"] = 2,
+	["bakedclay:red"] = 2,
+
 	-- Special
 	["ethereal:thin_ice"] = 3,
 	["ethereal:crystal_spike"] = 10,

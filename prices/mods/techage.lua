@@ -20,6 +20,7 @@ return {
 	["techage:basalt_cobble"] = 1,
 	["techage:red_stone"] = 2,
 	["techage:bauxite_cobble"] = 1,
+	["techage:bauxite_stone"] = 1,
 	["techage:basalt_glass"] = 4,
 	["techage:basalt_glass2"] = 4,
 	["techage:sieved_basalt_gravel"] = 1,

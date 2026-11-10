@@ -12,6 +12,9 @@ return {
 	["technic:marble"] = 2,
 	["technic:granite"] = 2,
 
+	["moretrees:rubber_tree_leaves"] = 1,
+	["moretrees:rubber_tree_sapling"] = 3,
+
 	-- Feeds Technic's latex and rubber chain (grinding, extracting, alloying).
 	["moretrees:rubber_tree_trunk"] = 4,
 }
