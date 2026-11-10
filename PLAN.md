@@ -146,6 +146,36 @@ All three are optional dependencies, reached through one adapter interface.
 
 To make those recipes work, the Minetest Game file also gained leaves (1), saplings (3), flowers (1), mushrooms and waterlily (2), and `technic_worldgen.lua` gained marble and granite (2). Result in the 51-mod world: 151 of 170 craftable Ethereal items are priced. The other 19 are blocked by the water bucket (the empty bucket's Techage recipe needs the unpriced `techage:iron_ingot`) or by food ingredient groups from mods that are not installed (sushi, teriyaki, fugu). Dyes come out very cheap (0.25) with Technic installed because the extractor makes 4 dyes from one flower.
 
+### Everness prices (drafted by Claude, open to adjustment)
+
+`prices/mods/everness.lua` was generated from category rules and is now a plain hand-editable file. It prices 293 items:
+
+| Group | Price |
+|---|---|
+| tree trunks | 4 (lava tree with lava 6) |
+| saplings | 3 |
+| leaves | 1 |
+| soils, sands, stones, mosses | 1 |
+| stone and volcanic spikes | 2 |
+| plants and vines | 1 |
+| flowers, cacti, mushrooms | 2 |
+| lanterns | 4 |
+| deep-ocean and crystal corals | 3 |
+| other corals | 2 |
+| crystal megaliths | 10 |
+| crystal cluster | 15 |
+| pyrite lump, quartz crystal | 20 |
+| bones, pottery sherds | 2 |
+| emerald ice | 8, 12, 20 |
+| weeping and crying obsidian | 40 |
+| mese tree fruit | 20 |
+
+Anchors for items that only come from uncrafting slabs and stairs: cobbles and plain stones 1, bricks 2, magma cobble 2, volcanic rock with magma 3, coloured crystals 12, dry tree 4, frosted ice 4, pottery sherd blank 2, crystal stone brick 2.
+
+**Deliberately unpriced** (not meant to be traded): flames, water geyser, lava and mineral water sources, buckets of lava or mineral water, termite blocks, cobwebs, skull candles, cursed mud, and ore-bearing nodes (coal, pyrite and quartz ore).
+
+Result in the 51-mod world: all 198 craftable Everness items are priced, 1816 items overall, no unknown names, no unstable loops. With Technic installed, pyrite ingots cost half a lump (10) because of grinding, like the other metals.
+
 ### Result on the 51-mod test world
 
 2707 recipes read (2474 crafting, 104 smelting, 83 grinding, 17 compressing, 14 alloy, 14 extracting, 1 freezing). 410 items priced, no unstable loops. 1480 craftable items are still unpriced because something they need has no price: mostly stairs (464), Techage (263), Everness (197), Technic machines (182), Ethereal (158). Natural default items that need anchors are clay lump, cactus, papyrus, ice, snow, obsidian and the farming crops (wheat, cotton, string).

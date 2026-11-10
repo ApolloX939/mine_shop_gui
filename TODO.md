@@ -19,7 +19,8 @@ All answered; see `PLAN.md`.
 - [x] Price files split into `prices/games/` and `prices/mods/`, seeded for Minetest Game and Technic.
 - [ ] After the collector exists, run the derivation on the real recipes and add anchors for items that are still unpriced (cycles, items only made by skipped recipes).
 - [x] Ethereal prices (`prices/mods/ethereal.lua`), drafted by Claude: review the values.
-- [ ] Decide prices for Everness, Techage and other content mods (currently unpriced). Techage chips and aluminium block the most recipes; the empty bucket needs `techage:iron_ingot`.
+- [x] Everness prices (`prices/mods/everness.lua`), drafted by Claude: review the values.
+- [ ] Decide prices for Techage and other content mods (currently unpriced). Techage chips and aluminium block the most recipes; the empty bucket needs `techage:iron_ingot`.
 - [ ] Price `techage:iron_ingot` (suggest 16, same as a steel ingot): it unlocks the empty bucket, the water bucket, and with them the Ethereal crystal chain, mud, quicksand and lemonade.
 - [ ] Torches come out at 0.56 each because the cheapest member of group `charcoal` (priced 2) beats coal (8). Decide if group pricing needs a rule (for example ignore groups wider than N members).
 - [ ] Add price files for the other games (`mineclonia`, `mineclone2`) when you want to support them.
