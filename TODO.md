@@ -13,6 +13,12 @@ All answered; see `PLAN.md`.
 
 ## Tasks
 
+- [ ] Try `/shop` in a real client and tell me what looks wrong (sizes, spacing, labels). The tests cannot see the appearance.
+- [ ] Translation files in `locale/` (all text already goes through `core.get_translator`).
+- [ ] A placeable shop block as an alternative to `/shop`.
+- [ ] A privilege or setting to control who may use the shop, and a way to close it.
+- [ ] A log of trades for the owner.
+
 - [ ] Version 2: price inference is written up in `PLAN_V2.md` for consideration. Not scheduled.
 
 - [x] Pricing derivation core (`src/pricing/derive.lua`) with tests.
@@ -40,7 +46,7 @@ All answered; see `PLAN.md`.
 - [x] Check Technic's recipe registration API for machine recipes. See `PLAN.md`.
 - [x] Add `mod.conf` and `init.lua`.
 - [ ] Build the base price list and the recipe-derived pricing.
-- [ ] Build the Buy/Sell formspec with a variable amount.
+- [x] Build the Buy/Sell formspec with a variable amount (`/shop`, three screens). See `PLAN.md`.
 - [ ] Verify the `credits_old` item-prefix load failure in a test world.
 - [ ] Test the `credits` V1.2.3 code path in the engine (needs a world with only the old version, and `credits_old` item-prefix handling).
 - [x] Decide how prices are scaled across currencies (cents vs whole credits vs item units). See `PLAN.md`.

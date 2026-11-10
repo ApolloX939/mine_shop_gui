@@ -257,6 +257,25 @@ Deliberately unpriced (a missing price means the item cannot be traded):
 - **Not goods:** ore nodes, liquid sources, fire and flames, bones, admin and test blocks, power and oil sources, wrench, prospector, sonic screwdriver, and filled barrels, canisters and cylinders (apart from the four recipes need).
 - **Cannot be made here:** mithril and nether armor and shields (need ingots from mods that are not installed); Technic's red and blue energy crystals, silver and mithril chests and dusts (need `moreores`); Ethereal's cooked dishes and Techage's sieve machines; pipeworks deployers and similar (their recipes need `mesecons`); everything that needs rice, soy sauce, sugar, garlic or a saucepan group from food mods that are not installed. If those mods are added, recipes will price what they can, and the rest needs a price file.
 
+### Shop window (implemented)
+
+Decisions (chosen with the owner): open with the `/shop` command first (a placeable block can come later), plain formspec with no extra mod, and an amount control made of a number field plus `-64 -10 -1 +1 +10 +64` buttons with a live total. The layout follows what I remember of the Minecraft EconomyShopGUI plugin the owner pointed to. I could not read the video, which only returned its title.
+
+Three screens, in `src/shop/`:
+- **Categories** (`ui.lua`, `catalog.lua`): one per mod with at least 4 tradable items, the rest under "Other", plus "Everything"; 15 per page; the picture is the dearest item of the mod; search box.
+- **Items**: 6 by 4 grid of item pictures, the buy price under each, a tooltip with name, buy and sell price (or "only N or more at once" when one item is worth less than a coin). Sorted by title; search words must all match the title or the technical name. Hidden variants and items that cannot be traded in either direction are left out.
+- **Trade**: amount controls, total to buy, payout, held count, BUY, SELL and SELL ALL. Buttons that do not apply are not drawn.
+
+Safety and correctness:
+- Item and category buttons carry only a position on the current page. The server looks the real item up in its own state, so a forged field cannot name an item; unknown positions and trade buttons outside the trade screen do nothing.
+- `trade.lua`: a trade is atomic. Buying pays first, then delivers; if delivery fails the payment is undone. Selling removes the items, then pays; if paying fails the items come back. Undoing uses a snapshot of the player's money that every currency adapter now provides (`snapshot` and `restore`: the inventory list for item currencies, the balance for `unified_money`, balance plus inventory for `credits`).
+- Only undamaged stacks without a `no_sell` mark are sold, and only items priced with `no_sell` false. A sale whose payout is under one coin is refused with a hint of the smallest amount that works.
+- The purchase limit is `mine_shop_gui_max_amount` (default 1000). Selling everything is not limited.
+
+Tested in the real engine: buying with change, not enough money, undeliverable purchase paid back (for `currency`, `credits` and `unified_money`), selling with flagged and worn stacks, sell all, flags and limits, the catalog (categories, search, paging, regeneration), the whole window flow including forged fields, and a `formspec_ast` syntax check of every screen (the parser must accept all elements that were written).
+
+Not yet checked: how the window looks in a real client. The tests prove the syntax and the behavior, not the appearance.
+
 ### Result on the 51-mod test world
 
 2707 recipes read (2474 crafting, 104 smelting, 83 grinding, 17 compressing, 14 alloy, 14 extracting, 1 freezing). 410 items priced, no unstable loops. 1480 craftable items are still unpriced because something they need has no price: mostly stairs (464), Techage (263), Everness (197), Technic machines (182), Ethereal (158). Natural default items that need anchors are clay lump, cactus, papyrus, ice, snow, obsidian and the farming crops (wheat, cotton, string).
