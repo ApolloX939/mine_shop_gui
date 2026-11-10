@@ -68,6 +68,15 @@ All three are optional dependencies, reached through one adapter interface.
 - `credits_old/mod.conf` was renamed to `name = credits_old` to avoid a load-time name clash. It still registers `credits:` items and the `/credits` command, so it will probably fail to load and conflicts with the new `credits`. Treat it as reference code. Test each credits version in its own world with only that version present.
 - Test mods in the parent folder: currency, unified_money, um_atm, credits, credits_old, technic, techage_modpack, ethereal, everness, 3d_armor, pipeworks, i3, unified_inventory.
 
+## Technic recipe API (checked in the source)
+
+- Recipes are read from `technic.recipes[type].recipes`, a table keyed by a sorted input hash. Each entry is `{time = n, input = {["mod:item"] = count, ...}, output = "mod:item N"}`. For types with `output_size` greater than 1, `output` is a list of itemstrings.
+- The recipe types are `alloy` (2 inputs), `grinding`, `compressing`, `extracting`, `freezing` and `separating` (centrifuge, 2 outputs). `technic.recipes[type].input_size` and `.output_size` give the shape. Smelting is not in this table: it is the built-in `cooking` craft type in `core.get_all_craft_recipes`.
+- Registration is postponed to `core.register_on_mods_loaded` inside technic, and the table is only complete after that callback. Our pricing must run after it, so `technic` needs to be in `optional_depends` and our callback registered later.
+- Technic clears some built-in crafts (for example sand variants), so `core.get_all_craft_recipes` at that point reflects what players can really do.
+- Input items may be aliases or groups in other mods, so resolve names through `core.registered_items` and aliases before using them.
+- `separating` is mostly the reverse of alloying (bronze dust to copper dust plus tin dust) and also has a 34-step uranium chain. These recipes have several different outputs, so a cost cannot be split between them without a rule.
+
 ## Pricing outline (not yet decided in detail)
 
 - Compute derived prices after all mods load, using `core.get_all_craft_recipes` plus Technic's registered machine recipes (API not yet checked).

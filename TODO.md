@@ -14,7 +14,7 @@ All answered; see `PLAN.md`.
 ## Tasks
 
 - [x] Write the currency adapter layer (`currency`, `unified_money`, `credits`, `items` behind one interface).
-- [ ] Check Technic's recipe registration API for machine recipes.
+- [x] Check Technic's recipe registration API for machine recipes. See `PLAN.md`.
 - [x] Add `mod.conf` and `init.lua`.
 - [ ] Build the base price list and the recipe-derived pricing.
 - [ ] Build the Buy/Sell formspec with a variable amount.
