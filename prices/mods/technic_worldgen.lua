@@ -8,6 +8,10 @@ return {
 	["technic:uranium_lump"] = 60,
 	["technic:sulfur_lump"] = 10,
 
+	-- Building stones
+	["technic:marble"] = 2,
+	["technic:granite"] = 2,
+
 	-- Feeds Technic's latex and rubber chain (grinding, extracting, alloying).
 	["moretrees:rubber_tree_trunk"] = 4,
 }
