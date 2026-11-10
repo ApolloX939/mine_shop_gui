@@ -181,19 +181,16 @@ function M.item_flags()
 	return result
 end
 
-local function is_set(text)
-	text = text:lower()
-	return text == "true" or text == "yes" or text == "1"
-end
-
--- Flags set on one stack through its metadata, for example
---   stack:get_meta():set_string("no_sell", "true")   (or set_int("no_sell", 1))
--- Metadata has no boolean setter; "true", "yes" and "1" all count as set.
+-- Flags set on one stack through its metadata:
+--   stack:get_meta():set_string("no_sell", "true")
+-- A flag is set when the key is present and its value is exactly the string
+-- "true". Any other value ("false", "1", "yes", ...) leaves it unset.
+-- Metadata has no boolean setter, so the string is what gets stored.
 function M.stack_flags(stack)
 	local meta = stack:get_meta()
 	local flags = {}
 	for _, key in ipairs(STACK_FLAG_KEYS) do
-		flags[key] = is_set(meta:get_string(key))
+		flags[key] = meta:contains(key) and meta:get_string(key) == "true"
 	end
 	return flags
 end

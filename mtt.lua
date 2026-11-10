@@ -650,21 +650,30 @@ mtt.register("flags: item definitions set them with _mine_shop_gui", function(ca
 	callback()
 end)
 
-mtt.register("flags: stack metadata sets them (strings and integers)", function(callback)
+mtt.register("flags: stack metadata flag is set only by the string 'true'", function(callback)
 	local stack = ItemStack("default:stone")
+	local meta = stack:get_meta()
 	local f = collect.stack_flags(stack)
-	assert(f.no_buy == false and f.no_sell == false)
+	assert(f.no_buy == false and f.no_sell == false, "absent keys are unset")
 
-	stack:get_meta():set_string("no_sell", "true")
-	stack:get_meta():set_int("no_buy", 1)
+	meta:set_string("no_sell", "true")
+	meta:set_string("no_buy", "true")
 	f = collect.stack_flags(stack)
-	assert(f.no_sell == true and f.no_buy == true)
+	assert(f.no_sell == true and f.no_buy == true, "'true' sets it")
 
-	stack:get_meta():set_string("no_sell", "false")
-	stack:get_meta():set_int("no_buy", 0)
-	f = collect.stack_flags(stack)
-	assert(f.no_sell == false and f.no_buy == false, "false and 0 do not count")
-	assert(stack:get_meta().set_bool == nil, "metadata really has no set_bool")
+	for _, value in ipairs({ "false", "1", "yes", "True", "TRUE", "0", "nonsense" }) do
+		meta:set_string("no_sell", value)
+		assert(collect.stack_flags(stack).no_sell == false, "'" .. value .. "' must not set it")
+	end
+
+	meta:set_int("no_sell", 1)
+	assert(collect.stack_flags(stack).no_sell == false, "integer 1 is stored as '1', not 'true'")
+
+	meta:set_string("no_sell", "")
+	assert(not meta:contains("no_sell"), "an empty string deletes the key")
+	assert(collect.stack_flags(stack).no_sell == false)
+	assert(collect.stack_flags(stack).no_buy == true, "other flag is independent")
+	assert(meta.set_bool == nil, "metadata really has no set_bool")
 	callback()
 end)
 
