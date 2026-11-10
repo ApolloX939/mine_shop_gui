@@ -182,7 +182,7 @@ Inferring raw-item prices from item properties and ore rarity was tested and loo
 
 ### Techage prices (drafted by Claude, open to adjustment)
 
-`prices/mods/techage.lua` prices 80 Techage items, plus `basic_materials:silver_wire` (6) and `compost:compost` (1). Techage's raw items are mostly made by its own machines with no craft recipe, so the prices are judgment calls that climb with the tech tier:
+`prices/mods/techage.lua` prices 64 Techage items, plus `basic_materials:silver_wire` (6) and `compost:compost` (1). Techage's raw items are mostly made by its own machines with no craft recipe, so the prices are judgment calls that climb with the tech tier:
 
 | Group | Price |
 |---|---|
