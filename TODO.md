@@ -15,7 +15,8 @@ All answered; see `PLAN.md`.
 
 - [x] Pricing derivation core (`src/pricing/derive.lua`) with tests.
 - [ ] Recipe collector: `core.get_all_craft_recipes` plus `technic.recipes`, single-output only, group membership, after technic's callback (add `technic` to `optional_depends`).
-- [ ] Base price file (format, loading) and a seed list from the raw items in the installed mods.
+- [x] Base price file format (Lua) and loader, with tests.
+- [ ] Seed `base_prices.lua`: raw items plus cycle anchors (cobblestone = 1). Needs price values for the main materials, see the question in the chat or below.
 - [ ] Markup settings per recipe type in `settingtypes.txt`.
 - [ ] Run the derivation on the real recipes and review the results for odd prices.
 
