@@ -573,7 +573,13 @@ mtt.register("price files: the shipped files apply only to what is installed", f
 	local prices, unknown = base_prices.load()
 	assert(prices["default:cobble"] == 1, "game file for 'minetest' is loaded")
 	assert(prices["default:iron_lump"] == 16)
-	assert(prices["technic:zinc_lump"] == nil, "technic is not in this world")
+	if core.get_modpath("technic_worldgen") then
+		assert(prices["technic:zinc_lump"] == 14, "technic_worldgen file is loaded")
+		assert(prices["moretrees:rubber_tree_trunk"] == 4)
+	else
+		assert(prices["technic:zinc_lump"] == nil, "technic is not in this world")
+	end
+	assert(prices["default:clay_lump"] == 2 and prices["farming:wheat"] == 3)
 	assert(#unknown == 0, "shipped prices name unknown items: " .. table.concat(unknown, ", "))
 	callback()
 end)
@@ -724,7 +730,10 @@ mtt.register("generate: real prices for Minetest Game", function(callback)
 	assert(near(items["default:stone"].price, 1) and items["default:stone"].source == "cooking")
 	assert(near(items["default:wood"].price, 1), "4 planks from a 4-unit log")
 	assert(near(items["default:stick"].price, 0.25), "4 sticks from one plank")
-	assert(near(items["default:steel_ingot"].price, 16), "smelted from an iron lump")
+	assert(near(items["default:steel_ingot"].price, core.get_modpath("technic") and 8 or 16),
+		"smelted from an iron lump (16), or from half a lump when Technic grinds it")
+	assert(near(items["default:clay"].price, 8), "4 clay lumps at 2 each")
+	assert(items["default:paper"] and items["default:bookshelf"], "papyrus anchor prices paper and shelves")
 	for name, entry in pairs(items) do
 		assert(entry.price >= 0 and entry.price < math.huge, name)
 		assert(entry.no_buy == false and entry.no_sell == false,
@@ -734,10 +743,11 @@ mtt.register("generate: real prices for Minetest Game", function(callback)
 end)
 
 mtt.register("generate: markup setting applies per recipe type", function(callback)
+	local before = mine_shop_gui.pricing.generate()["default:steel_ingot"].price
 	core.settings:set("mine_shop_gui_markup_cooking", "50")
 	local ok, err = pcall(function()
 		local items = mine_shop_gui.pricing.generate()
-		assert(near(items["default:steel_ingot"].price, 24), "16 + 50%")
+		assert(near(items["default:steel_ingot"].price, before * 1.5), "smelting costs 50% more")
 		assert(near(items["default:wood"].price, 1), "crafting markup is still 0")
 	end)
 	core.settings:remove("mine_shop_gui_markup_cooking")
@@ -818,3 +828,59 @@ mtt.register("trade checks: flags on items and on stacks", function(callback)
 	pricing.generate() -- back to the real prices
 	callback()
 end)
+
+---------------------------------------------------------------- Technic (only when it is installed)
+
+if core.get_modpath("technic") then
+
+mtt.register("technic: machine recipes are collected, multi-output ones are not", function(callback)
+	local by_type = {}
+	for _, r in ipairs(collect.recipes()) do
+		by_type[r.type] = (by_type[r.type] or 0) + 1
+		assert(r.output.name and r.output.count >= 1, "one output per recipe")
+	end
+	for _, rtype in ipairs({ "grinding", "alloy", "compressing", "extracting", "cooking", "normal" }) do
+		assert((by_type[rtype] or 0) > 0, "no " .. rtype .. " recipes collected")
+	end
+	assert(by_type["separating"] == nil, "separating recipes have two outputs and are skipped")
+	callback()
+end)
+
+mtt.register("technic: ingots cost half their lump because players grind", function(callback)
+	local items = mine_shop_gui.pricing.generate()
+	local metals = {
+		{ "default:iron_lump", "default:steel_ingot" },
+		{ "default:copper_lump", "default:copper_ingot" },
+		{ "default:tin_lump", "default:tin_ingot" },
+		{ "default:gold_lump", "default:gold_ingot" },
+	}
+	for _, pair in ipairs(metals) do
+		local lump, ingot = items[pair[1]], items[pair[2]]
+		assert(lump and lump.source == "base", pair[1] .. " keeps its base price")
+		assert(ingot and near(ingot.price, lump.price / 2),
+			pair[2] .. " should be half of " .. pair[1] .. ", got " .. tostring(ingot and ingot.price))
+		assert(ingot.source == "cooking", pair[2] .. " is smelted from ground dust")
+	end
+	callback()
+end)
+
+mtt.register("technic: grinding markup of 100% puts ingots back at the lump price", function(callback)
+	core.settings:set("mine_shop_gui_markup_grinding", "100")
+	local ok, err = pcall(function()
+		local items = mine_shop_gui.pricing.generate()
+		assert(near(items["default:steel_ingot"].price, 16))
+		assert(near(items["default:gold_ingot"].price, 40))
+	end)
+	core.settings:remove("mine_shop_gui_markup_grinding")
+	assert(ok, err)
+	callback()
+end)
+
+mtt.register("technic: its own lumps and rubber trunk are priced", function(callback)
+	local items = mine_shop_gui.pricing.generate()
+	assert(items["technic:zinc_lump"].price == 14 and items["technic:zinc_lump"].source == "base")
+	assert(items["moretrees:rubber_tree_trunk"].price == 4)
+	callback()
+end)
+
+end
