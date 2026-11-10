@@ -80,7 +80,7 @@ All three are optional dependencies, reached through one adapter interface.
 ## Recipe-derived pricing (decided; core implemented)
 
 - **Cheapest route:** an item costs the lowest cost over all its recipes (craft, smelt, machine, uncraft). Computed by relaxing prices until nothing gets cheaper, so cycles such as block <-> ingots settle on their own. With a sell ratio below 100% no buy/sell loop can make money.
-- **Base prices are fixed:** an item with a base price is never overridden by a recipe.
+- **Base prices are ceilings (decided):** an item costs the lower of its base price and its cheapest recipe, so a base price only says what the item costs when nothing cheaper exists. A price that must never be lowered is written `{ price = 1, fixed = true }`; cobblestone, the price unit itself, is the only one so far. See "Base prices as ceilings" below.
 - **Markup:** configurable percentage per recipe type (crafting, smelting, and each Technic machine type), default 0%. The derivation takes a `markup(recipe_type)` function.
 - **Multi-output recipes (Technic separating) are skipped.** They mostly undo alloying, and splitting cost between outputs has no right answer.
 - **Groups:** a group ingredient costs as much as its cheapest priced member.
@@ -215,25 +215,29 @@ Techage keeps its recipes in several private places, so the collector reads two 
 - Result in the 51-mod world: 2896 recipes collected; fabricators 1 + 2 + 5, doser 18, melting 4, TA3 furnace 105, grinding 139.
 - **Hand-set Techage prices changed accordingly.** Vacuum tube, WLAN and RAM chips, LEDs, both AI chips and the SSD are no longer listed: they are priced from their parts. The vacuum tube comes out at 37 (not my earlier guess of 12) because each pair needs a usmium nugget; chips and LEDs come out much cheaper than my tier guesses (WLAN chip 16, LED 3). Items that depend on the craft guide keep a hand price, now aligned with what the recipes give (silicon wafer 3, carbon fiber 5, magnet shield 38, graphite powder 8, clay and cement powder 1), so servers without `unified_inventory` still price them. A markup on `ta4_electronic_fab` and the others is the way to make later tiers dearer.
 
-### Base prices above recipe cost (finding, decision pending)
+### Base prices as ceilings (decided and implemented)
 
-A base price is never lowered by a recipe, so a recipe can make an item for less than its base price. The generator now reports these (`report.below_base`, and one log line at startup). In the 51-mod world there are 28. Eleven are real sell-back gaps (buying the ingredients, crafting and selling back at the 50% sell ratio would make money):
+Finding: Techage's machines make some base-priced items for far less than their base price (the melting pot turns cobblestone into obsidian, priced 25; the grinder turns sand into clay, so a clay lump costs 0.25 against a base of 2). With fixed base prices a player could buy the cheap ingredients, craft, and sell back at the 50% sell ratio for a profit.
 
-| Item | Base | Cheapest recipe | Machine |
-|---|---|---|---|
-| obsidian | 25 | 1 | melting pot turns cobblestone into obsidian |
-| basalt glass thin, thin 2 | 6 | 0.5 | TA3 furnace |
-| basalt glass thin XL, XL 2 | 10 | 1 | TA3 furnace |
-| clay lump | 2 | 0.25 | Techage's grinder turns sand into clay |
-| TA5 fusion reactor shell | 200 | 45 | TA3 furnace |
-| silver sand | 1 | 0.25 | grinder |
-| snow | 1 | 0.33 | crafting |
-| aluminium | 24 | 8 | TA3 furnace |
-| bauxite gravel | 3 | 1 | grinder |
+Decision (chosen from three options): a base price is a ceiling. The derivation lowers it to the cheapest recipe, which matches the Technic ingot rule (players always use the machines). `{ price = n, fixed = true }` keeps a price whatever recipes say; `default:cobble` is fixed because it defines the unit. A lowered item takes the recipe type as its `source`.
 
-The other 17 are within a factor of 2 (no profit at a 50% sell ratio) or close to it.
+Reports (`generate()` returns them, and the server log shows them):
+- `report.lowered`: base prices that recipes lowered (31 in the 51-mod world, for example obsidian 25 to 1, clay lump 2 to 0.25, aluminium 24 to 6, basalt glass 6 to 0.5, TA5 control unit 150 to 71).
+- `report.below_base`: fixed prices that a recipe could undercut (none in the shipped data; a test checks this).
+- `report.held`: items held inside a gaining loop (below).
 
-Options to close the gaps: (A) keep base prices fixed and lower the specific base prices by hand, in `techage.lua` so it only happens when Techage is installed (as for Technic's ingots); (B) make a base price a ceiling, so an item costs the lower of its base price and its cheapest recipe, which is automatic and matches the Technic ingot rule; (C) leave it and rely on the report. Recommended: B, with a way to mark a base price as fixed for true anchors.
+The change also exposed one inconsistent anchor of mine: desert sandstone was 2 but 4 desert sand make it, so it is now 4.
+
+### Gaining loops (implemented)
+
+Some machine combinations gain value: Technic's compressor turns 2 sand into 1 sandstone and Techage's grinder turns 1 sandstone into 4 sand; a similar loop runs through silver sand, stone and Technic's stone dust. Prices round such a loop never settle. The derivation now cuts them:
+
+- Only loops that nothing unstable feeds into are cut. The block, slab and stair groups below them were only moving because the loop above had not settled, and cutting those too gave nonsense prices (cement came out at 0.000).
+- A loop member with a base price is held at that price. A loop with no base-priced member is priced from its routes that do not run round the loop. A member with no outside route stays unpriced (`report.dropped`).
+- Everything downstream keeps a sensible price. In the 51-mod world sand (1) and silver sand (1) are held although machines can make them for 0.5 and 0.25; `report.held` lists them.
+- Each cut is traced at log level info (`price loop: ...`).
+
+A property test checks that after generation no recipe makes an item for less than its price, except for fixed prices and items held in a loop.
 
 ### Result on the 51-mod test world
 

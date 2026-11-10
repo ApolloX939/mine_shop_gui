@@ -29,6 +29,7 @@ locale/         # optional: translation files
 - Shop actions that move items or currency must be atomic: check inventory space and funds first, then apply both changes, and handle failure paths without losing or duplicating items.
 - Use `core.get_translator` (`S("...")`) for user-facing strings.
 - Price files live in `prices/games/<game_id>.lua` and `prices/mods/<mod_id>.lua`. Name a mod's file after the `name` in its `mod.conf`, never after its folder (folder names are deprecated). Every item named in a price file must exist; check against a world that has the mod loaded.
+- A price in a price file is a ceiling: a recipe that makes the item for less lowers it. Write `{ price = n, fixed = true }` only for a true anchor that must never be lowered. When you add a loop anchor (an item only made by uncrafting slabs, stairs or blocks), set it to the cost of its ingredients, or the ceiling rule will lower it and the report will show it.
 - Declare every dependency in `mod.conf` (`depends` or `optional_depends`) and guard optional ones with `core.get_modpath("othermod")`.
 
 ## Testing and running
