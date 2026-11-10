@@ -278,6 +278,14 @@ First look in a real client (screenshots from the owner) showed three problems, 
 
 Currency picture (owner's request: a symbol or a small image of the currency item, the item preferred). Every adapter now says which item stands for its money (`icon()`), how to write an amount as a plain number (`number`), and how to write it with a short mark (`format_symbol`): `currency` shows the 1.00 Minegeld note and `$1.25`; an item currency shows its smallest item; `credits` shows `credits:credits` and `15 cr`; `unified_money` has no item, so it shows text with `$`. The window draws the picture (0.5 high) beside the number for the balance, the price under each grid item, and the buy, sell, pay and receive lines in the trade screen; where there is no picture, or only text fits (tooltips, messages), it uses the text mark. An icon that is not a registered item is ignored.
 
+### Item currency: selection, worth and money (owner report)
+
+The owner set `mine_shop_gui_item_currency = default:steel_ingot` with `mine_shop_gui_currency = currency` and saw no effect. Three causes, all fixed:
+- `currency` is the Minegeld mod, not "an item currency" (that is `items`). The server now logs a warning when an item currency is set up but another currency is in use, naming the fix. On `auto`, a configured item currency is chosen first (decided: setting one up means wanting it); an explicit choice still wins.
+- An item written without a value was rejected, so the list came out empty. A bare item name now counts as 1.
+- There was no way to say what the item is worth. New setting `mine_shop_gui_item_currency_worth`: price units one unit of the currency is worth (1 unit = one cobblestone). Left empty, the shop's own price for the smallest currency item is used (so a steel ingot is worth what the shop prices it at, 8 under Technic). Nonsense falls back to that. The old `mine_shop_gui_scale_items` setting is gone from the settings menu (amount per price unit is the inverse and confusing), though an explicit `mine_shop_gui_scale_items` in `minetest.conf` still wins.
+- The currency's own items are money, not goods: they are not listed in the catalog and cannot be bought or sold (`api.is_money`). This also covers `credits`.
+
 ### Result on the 51-mod test world
 
 2707 recipes read (2474 crafting, 104 smelting, 83 grinding, 17 compressing, 14 alloy, 14 extracting, 1 freezing). 410 items priced, no unstable loops. 1480 craftable items are still unpriced because something they need has no price: mostly stairs (464), Techage (263), Everness (197), Technic machines (182), Ethereal (158). Natural default items that need anchors are clay lump, cactus, papyrus, ice, snow, obsidian and the farming crops (wheat, cotton, string).

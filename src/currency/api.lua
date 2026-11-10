@@ -50,6 +50,13 @@ function api.resolve()
 	api.active = nil
 	local wanted = core.settings:get("mine_shop_gui_currency") or "auto"
 
+	local configured_items = (core.settings:get("mine_shop_gui_item_currency") or "") ~= ""
+
+	-- An item currency that has been set up is meant to be used.
+	if wanted == "auto" and configured_items and api.adapters.items and api.adapters.items.available() then
+		api.active = api.adapters.items
+	end
+
 	if wanted ~= "auto" then
 		local adapter = api.adapters[wanted]
 		if adapter and adapter.available() then
@@ -66,6 +73,11 @@ function api.resolve()
 				break
 			end
 		end
+	end
+
+	if configured_items and api.active and api.active.name ~= "items" then
+		log("warning", "mine_shop_gui_item_currency is set but the currency in use is '" .. api.active.name
+			.. "'. Set mine_shop_gui_currency to 'items' (or 'auto') to use the item currency.")
 	end
 
 	if api.active then
@@ -114,7 +126,14 @@ function api.scale()
 	if not adapter then return 1 end
 	local value = tonumber(core.settings:get("mine_shop_gui_scale_" .. adapter.name))
 	if value and value > 0 then return value end
+	if adapter.scale then return adapter.scale() end
 	return adapter.default_scale or 1
+end
+
+-- Is this item the active currency itself? Money is not for sale.
+function api.is_money(item)
+	local adapter = api.active
+	return adapter ~= nil and adapter.is_money ~= nil and adapter.is_money(item) or false
 end
 
 local function sell_ratio()

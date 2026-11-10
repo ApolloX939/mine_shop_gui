@@ -15,7 +15,6 @@ mine_shop_gui_sell_ratio (Sell price ratio) float 0.5 0.0 1.0
 mine_shop_gui_scale_currency (Scale: currency, cents per unit) float 5 0.0001
 mine_shop_gui_scale_unified_money (Scale: unified_money) float 1 0.0001
 mine_shop_gui_scale_credits (Scale: credits) float 1 0.0001
-mine_shop_gui_scale_items (Scale: item currency) float 0.05 0.0001
 
 [Shop]
 
@@ -44,10 +43,19 @@ mine_shop_gui_markup_milling (Markup: Techage milling, %) float 0 0 1000
 [Item currency]
 
 # Use ordinary items as money, for example emeralds under Mineclonia or VoxeLibre.
+# To use it, also set the currency above to 'items' (or leave it on 'auto').
 # Comma-separated list of itemname=value pairs. Values are whole numbers of the
-# smallest unit. List larger denominations too if you want change to be made in them.
-# Example: mcl_core:emerald_block=9, mcl_core:emerald=1
+# smallest unit; an item with no value counts as 1. List larger denominations too
+# if you want change to be made in them.
+# Examples: default:steel_ingot
+#           mcl_core:emerald_block=9, mcl_core:emerald=1
 mine_shop_gui_item_currency (Item currency) string
+
+# How many price units one unit of the item currency is worth (1 unit = one
+# cobblestone). For example 8 means one steel ingot buys what 8 cobblestones cost.
+# Leave empty to use the shop's own price for the smallest currency item.
+# The items of the currency themselves are never sold in the shop.
+mine_shop_gui_item_currency_worth (Item currency worth, price units) float
 
 # Label shown after amounts when the item currency is in use, for example "Emeralds".
 mine_shop_gui_item_currency_label (Item currency label) string

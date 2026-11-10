@@ -122,6 +122,17 @@ function M.new(def)
 		return math.floor(amount / unit + 0.5) * unit
 	end
 
+	-- The smallest denomination: its name and its value.
+	function self.smallest()
+		local list = resolved().list
+		return list[#list]
+	end
+
+	-- Is this item one of the currency's own notes, coins or items?
+	function self.is_money(item)
+		return resolved().values[item] ~= nil
+	end
+
 	function self.snapshot(player)
 		local inv = get_inventory(player)
 		return inv and inv:get_list("main")

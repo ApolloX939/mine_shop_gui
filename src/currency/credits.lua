@@ -62,6 +62,10 @@ function adapter.round(amount)
 	return math.floor(amount + 0.5)
 end
 
+function adapter.is_money(item)
+	return item == "credits:credits" or item == "credits:credits_mkii" or item == "credits:credits_mkiii"
+end
+
 function adapter.snapshot(player)
 	local inv = get_inventory(player)
 	if not inv then return nil end

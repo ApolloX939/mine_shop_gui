@@ -2,6 +2,7 @@
 -- Built from mine_shop_gui.pricing.items and rebuilt whenever prices are regenerated.
 
 local P = mine_shop_gui.pricing
+local api = mine_shop_gui.currency
 
 local C = {}
 
@@ -39,7 +40,7 @@ local function build()
 		local def = core.registered_items[name]
 		-- hidden variants and items that cannot be traded either way stay out
 		if def and (def.groups or {}).not_in_creative_inventory ~= 1
-				and not (entry.no_buy and entry.no_sell) then
+				and not (entry.no_buy and entry.no_sell) and not api.is_money(name) then
 			local record = {
 				name = name,
 				mod = name:match("^([^:]+):") or "?",
@@ -93,7 +94,11 @@ local function build()
 end
 
 local function data()
-	if not cache or cache.generation ~= P.generation then cache = build() end
+	local currency = api.active and api.active.name
+	if not cache or cache.generation ~= P.generation or cache.currency ~= currency then
+		cache = build()
+		cache.currency = currency
+	end
 	return cache
 end
 

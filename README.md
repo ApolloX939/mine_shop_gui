@@ -19,7 +19,16 @@ The shop picks one automatically, or you choose in the settings. It works with:
 - **currency** (Minegeld notes and coins, with change made for you)
 - **unified_money** (account balance)
 - **credits** (digital balance, and physical credits; both V1.2.3 and V1.3)
-- **any items you name**, for example emeralds in Mineclonia or VoxeLibre (`mine_shop_gui_item_currency`)
+- **any items you name**, for example emeralds in Mineclonia or VoxeLibre. A working setup:
+
+  ```
+  mine_shop_gui_currency = items
+  mine_shop_gui_item_currency = default:steel_ingot
+  mine_shop_gui_item_currency_label = Ingots
+  mine_shop_gui_item_currency_worth = 8
+  ```
+
+  Here one steel ingot is worth 8 cobblestones, so 16 cobblestones cost 2 ingots. The currency items are shown beside prices and are never sold in the shop.
 
 ## Settings
 
@@ -27,12 +36,14 @@ All settings are in the Luanti settings menu under "Mine ShopGUI".
 
 | Setting | Meaning |
 |---|---|
-| `mine_shop_gui_currency` | `auto`, `currency`, `unified_money`, `credits` or `items` |
+| `mine_shop_gui_currency` | `auto`, `currency`, `unified_money`, `credits` or `items`. `currency` means the Minegeld mod; to use your own item, choose `items`. On `auto`, an item currency you have set up is used first |
 | `mine_shop_gui_sell_ratio` | share of the buy price paid when selling (0.5 = half) |
 | `mine_shop_gui_scale_<currency>` | how much of that currency one price unit is worth |
 | `mine_shop_gui_markup_<recipe type>` | extra percentage on items made by that kind of recipe |
 | `mine_shop_gui_max_amount` | the most a player can buy at once |
-| `mine_shop_gui_item_currency` | `item=value, item=value` list for an item currency |
+| `mine_shop_gui_item_currency` | the items that are the money: `default:steel_ingot`, or `mcl_core:emerald_block=9, mcl_core:emerald=1` (an item with no value is worth 1) |
+| `mine_shop_gui_item_currency_worth` | how many price units one unit of the item currency is worth. Empty uses the shop's own price for the smallest item |
+| `mine_shop_gui_item_currency_label` | the name shown after amounts, for example `Ingots` |
 
 One price unit is the value of one cobblestone.
 

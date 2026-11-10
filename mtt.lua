@@ -45,6 +45,15 @@ local function reset_credits(name, digital)
 	if digital and digital > 0 then credits.add_coin(name, digital) end
 end
 
+-- Run fn with a setting changed, then put the setting back as it was.
+local function with_setting(key, value, fn)
+	local original = core.settings:get(key)
+	if value == nil then core.settings:remove(key) else core.settings:set(key, value) end
+	local ok, err = pcall(fn)
+	if original == nil then core.settings:remove(key) else core.settings:set(key, original) end
+	assert(ok, err)
+end
+
 local function use(name)
 	local adapter = assert(api.adapters[name], "no adapter " .. name)
 	assert(adapter.available(), "adapter not available: " .. name)
@@ -56,13 +65,30 @@ end
 
 mtt.register("currency: auto selection picks currency first", function(callback)
 	core.settings:set("mine_shop_gui_currency", "auto")
+	with_setting("mine_shop_gui_item_currency", "", function()
+		assert(api.resolve().name == "currency")
+	end)
+	callback()
+end)
+
+mtt.register("currency: a configured item currency is used by auto", function(callback)
+	core.settings:set("mine_shop_gui_currency", "auto")
+	assert((core.settings:get("mine_shop_gui_item_currency") or "") ~= "", "the test config sets an item currency")
+	assert(api.resolve().name == "items", "auto uses the item currency once it is set up")
+	-- an explicit choice still wins
+	core.settings:set("mine_shop_gui_currency", "currency")
 	assert(api.resolve().name == "currency")
+	core.settings:set("mine_shop_gui_currency", "items")
+	assert(api.resolve().name == "items")
+	core.settings:set("mine_shop_gui_currency", "auto")
 	callback()
 end)
 
 mtt.register("currency: unavailable explicit choice falls back to auto", function(callback)
 	core.settings:set("mine_shop_gui_currency", "nonexistent")
-	assert(api.resolve().name == "currency")
+	with_setting("mine_shop_gui_item_currency", "", function()
+		assert(api.resolve().name == "currency")
+	end)
 	core.settings:set("mine_shop_gui_currency", "auto")
 	callback()
 end)
@@ -325,10 +351,12 @@ mtt.register("price: credits and items use their own scales", function(callback)
 	assert(api.price(0.2, "buy") == 1)
 	assert(api.price(10, "sell") == 5)
 	use("items")
-	assert(api.price(20, "buy") == 1, "20 cobblestone is one item")
-	assert(api.price(100, "buy") == 5)
-	local amount, why = api.price(10, "sell")
-	assert(amount == nil and why == "too_cheap", "5 units sells for less than one item")
+	with_setting("mine_shop_gui_item_currency_worth", "20", function()
+		assert(api.price(20, "buy") == 1, "20 cobblestone is one item")
+		assert(api.price(100, "buy") == 5)
+		local amount, why = api.price(10, "sell")
+		assert(amount == nil and why == "too_cheap", "5 units sells for less than one item")
+	end)
 	use("unified_money")
 	assert(api.price(7, "buy") == 7)
 	callback()
@@ -1761,3 +1789,109 @@ mtt.register("shop window: the currency pictures keep the syntax valid", functio
 end)
 
 end
+
+---------------------------------------------------------------- item currency: worth, format, money is not goods
+
+mtt.register("item currency: an item without a value counts as 1", function(callback)
+	local parse = api.adapters.items.parse_setting
+	local list = parse("default:steel_ingot")
+	assert(#list == 1 and list[1].name == "default:steel_ingot" and list[1].value == 1)
+	list = parse(" mcl_core:emerald_block = 9 , mcl_core:emerald ,  default:gold_ingot=1")
+	assert(#list == 3 and list[1].value == 9 and list[2].value == 1 and list[3].value == 1)
+	assert(#parse("two words here") == 0, "something that is not an item name is ignored")
+	assert(#parse("") == 0 and #parse(nil) == 0)
+	callback()
+end)
+
+mtt.register("item currency: worth comes from the setting or from the shop's own price", function(callback)
+	local items = use("items")
+	pricing_api.generate()
+	local smallest = items.smallest()
+	assert(smallest.name == "default:gold_ingot" and smallest.value == 1, "the smallest item of the test currency")
+
+	-- no setting: the shop's own price for the smallest item
+	with_setting("mine_shop_gui_item_currency_worth", nil, function()
+		local own = pricing_api.get("default:gold_ingot").price
+		assert(near(items.worth(), own), "worth " .. items.worth() .. " against the price " .. own)
+		assert(near(api.scale(), 1 / own))
+	end)
+	-- the owner decides
+	with_setting("mine_shop_gui_item_currency_worth", "8", function()
+		assert(items.worth() == 8 and near(api.scale(), 0.125))
+		assert(api.price(16, "buy") == 2, "16 units cost 2 items when one item is worth 8")
+		assert(api.price(40, "sell") == 3, "40 units sell for 2.5, rounded to 3 items")
+	end)
+	-- nonsense is ignored
+	for _, bad in ipairs({ "0", "-4", "abc" }) do
+		with_setting("mine_shop_gui_item_currency_worth", bad, function()
+			assert(items.worth() > 0, "worth after '" .. bad .. "'")
+		end)
+	end
+	-- an explicit scale still wins over the worth
+	with_setting("mine_shop_gui_scale_items", "0.5", function()
+		assert(api.scale() == 0.5)
+	end)
+	api.resolve()
+	callback()
+end)
+
+mtt.register("item currency: the currency's own items are never sold in the shop", function(callback)
+	use("items")
+	pricing_api.generate()
+	assert(api.is_money("default:gold_ingot") and not api.is_money("default:cobble"))
+	local price, why = trade.quote("default:gold_ingot", 1, "buy")
+	assert(price == nil and why == "not_for_sale", "no buying money")
+	price, why = trade.quote("default:gold_ingot", 1, "sell")
+	assert(price == nil and why == "not_for_sale", "no selling money")
+	for _, record in ipairs(catalog_api.items("all")) do
+		assert(record.name ~= "default:gold_ingot", "the catalog does not list the currency")
+	end
+	assert(catalog_api.items("all", "cobble")[1], "other items are still listed")
+
+	-- with another currency active the same item is an ordinary good again
+	use("currency")
+	assert(not api.is_money("default:gold_ingot"))
+	local found = false
+	for _, record in ipairs(catalog_api.items("all")) do
+		if record.name == "default:gold_ingot" then found = true end
+	end
+	assert(found, "listed again when it is not the currency")
+	assert(trade.quote("default:gold_ingot", 1, "buy"))
+
+	if api.adapters.credits.available() then
+		use("credits")
+		assert(api.is_money("credits:credits") and api.is_money("credits:credits_mkii"))
+		assert(not api.is_money("default:gold_ingot"))
+	end
+	api.resolve()
+	callback()
+end)
+
+mtt.register("item currency: the shop works end to end with an item currency", function(callback)
+	local items = use("items")
+	pricing_api.generate()
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		with_setting("mine_shop_gui_item_currency_worth", "10", function()
+			with_player("shop_item1", function(_, inv)
+				inv:set_stack("main", 1, ItemStack("default:gold_ingot 3"))
+				ui.open("shop_item1", "cobble")
+				assert(sent.shop_item1:find("item_image[10.9,0.45;0.5,0.5;default:gold_ingot]", 1, true),
+					"the currency item is the picture beside the balance")
+				click("shop_item1", { [pick_item("shop_item1", "default:cobble")] = "" })
+				-- 10 cobblestone = 10 units = 1 ingot
+				click("shop_item1", { amount = "20", buy = "BUY" })
+				assert(ui.state("shop_item1").message.ok, "bought")
+				assert(has_stack(inv, "default:cobble 20") and trade.sellable_count("shop_item1", "default:cobble") == 20)
+				assert(items.balance("shop_item1") == 1, "3 ingots - 2 = 1: " .. tostring(items.balance("shop_item1")))
+				click("shop_item1", { sellall = "x" })
+				-- 20 units * 0.5 = 10 units = 1 ingot
+				assert(ui.state("shop_item1").message.ok and items.balance("shop_item1") == 2)
+			end)
+		end)
+	end)
+	restore()
+	api.resolve()
+	assert(ok, err)
+	callback()
+end)

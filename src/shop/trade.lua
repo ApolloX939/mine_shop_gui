@@ -49,7 +49,7 @@ end
 function T.quote(item, amount, mode)
 	item = collect.resolve(item)
 	local entry = pricing.get(item)
-	if not entry then return nil, "not_for_sale" end
+	if not entry or api.is_money(item) then return nil, "not_for_sale" end
 	if (mode == "buy" and entry.no_buy) or (mode == "sell" and entry.no_sell) then
 		return nil, "not_for_sale"
 	end
