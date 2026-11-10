@@ -116,6 +116,36 @@ All three are optional dependencies, reached through one adapter interface.
 - **Hook (decided: whole table):** `mine_shop_gui.register_on_prices_generated(function(items) ... end)`. Register while mods load. Runs after the collector and derivation, in registration order, and edits `items` in place: change a price, remove an entry, add an entry, set `no_buy` / `no_sell`. Afterwards the table is checked: entries that are not tables, have a bad price, or name an unregistered item are dropped with a warning, and a hook that throws is skipped without stopping the others. A hook registered late runs immediately with a warning.
 - **Trade checks:** `pricing.get(name)`, `pricing.can_buy(name)` and `pricing.can_sell(stack)` (item flags and the stack's own metadata).
 
+### Ethereal prices (drafted by Claude, open to adjustment)
+
+`prices/mods/ethereal.lua` prices all 137 raw Ethereal items by category, relative to cobblestone = 1:
+
+| Group | Price |
+|---|---|
+| tree trunks (same as Minetest Game logs, so planks cost 1) | 4 |
+| bamboo, bush stems, mushroom pores, mangrove roots | 2 |
+| saplings | 3 |
+| leaves and litter | 1 |
+| ordinary soils | 1 |
+| crystal, fiery and magical soils | 3 |
+| common plants and flowers | 1 |
+| rare plants (magical grass, barrel cactus, slime mold) | 2 |
+| crystalgrass, wet sponge, illumishrooms | 3 |
+| fire flower | 5 |
+| corals | 2 |
+| basic foods | 2 |
+| cactus flower | 3 |
+| firethorn jelly | 4 |
+| golden apple | 40 |
+| edible fish | 6 |
+| other sea creatures | 3 |
+| thin ice | 3 |
+| crystal spike | 10 |
+| etherium dust and ore | 40 |
+| stairs-only anchors: mushroom trunk 4, blue marble 3, banana 2 | |
+
+To make those recipes work, the Minetest Game file also gained leaves (1), saplings (3), flowers (1), mushrooms and waterlily (2), and `technic_worldgen.lua` gained marble and granite (2). Result in the 51-mod world: 151 of 170 craftable Ethereal items are priced. The other 19 are blocked by the water bucket (the empty bucket's Techage recipe needs the unpriced `techage:iron_ingot`) or by food ingredient groups from mods that are not installed (sushi, teriyaki, fugu). Dyes come out very cheap (0.25) with Technic installed because the extractor makes 4 dyes from one flower.
+
 ### Result on the 51-mod test world
 
 2707 recipes read (2474 crafting, 104 smelting, 83 grinding, 17 compressing, 14 alloy, 14 extracting, 1 freezing). 410 items priced, no unstable loops. 1480 craftable items are still unpriced because something they need has no price: mostly stairs (464), Techage (263), Everness (197), Technic machines (182), Ethereal (158). Natural default items that need anchors are clay lump, cactus, papyrus, ice, snow, obsidian and the farming crops (wheat, cotton, string).
