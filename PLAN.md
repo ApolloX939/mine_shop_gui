@@ -40,7 +40,20 @@ All three are optional dependencies, reached through one adapter interface.
 - **Sell price:** buy price multiplied by a configurable fraction (default 50%), set in `settingtypes.txt`.
 - **Rounding (`currency`, smallest coin 5 cents):** keep exact prices internally and round only the final transaction total to the nearest 5 cents, so buying many cheap items stays fair.
 
+## Currency layer (implemented)
+
+- `src/currency/api.lua`: registry and the single interface the shop uses (`balance`, `withdraw`, `deposit`, `round`, `format`). Amounts are whole numbers in the active currency's smallest unit. `withdraw` and `deposit` are atomic and return `true` or `false, reason` (`invalid_amount`, `insufficient_funds`, `no_room`, `unavailable`).
+- `src/currency/denominations.lua`: shared adapter for item-based currencies. Paying removes all the player's money, then hands back change (greedy, largest first); the inventory is restored if the change does not fit.
+- Adapters: `currency` (cents), `unified_money`, `credits`, and `items` (any items listed in the `mine_shop_gui_item_currency` setting, for example emeralds under Mineclonia or VoxeLibre; unknown items are logged and ignored).
+- Auto order: currency, unified_money, credits, items. An explicit setting naming an unavailable currency falls back to auto with a warning.
+- Callers must pass amounts already rounded with `api.round`. Amounts that are not a whole multiple of the currency's smallest unit are rejected, never silently adjusted.
+- `credits` payments spend the digital balance first, then physical stacks. Any surplus from a physical stack is returned to the digital balance, so the shop never has to create valued stacks. Payouts to the player are always digital. (Decided while implementing; revisit if physical change is wanted.)
+
 ## Testing notes
+
+- Tests use `mtt` in the real Luanti engine; see `AGENTS.md` for how to run them.
+- Covered: currency, items, unified_money and credits V1.3. Not covered: credits V1.2.3 (cannot coexist with V1.3 in one world).
+
 
 - `credits_old/mod.conf` was renamed to `name = credits_old` to avoid a load-time name clash. It still registers `credits:` items and the `/credits` command, so it will probably fail to load and conflicts with the new `credits`. Treat it as reference code. Test each credits version in its own world with only that version present.
 - Test mods in the parent folder: currency, unified_money, um_atm, credits, credits_old, technic, techage_modpack, ethereal, everness, 3d_armor, pipeworks, i3, unified_inventory.

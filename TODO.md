@@ -13,9 +13,13 @@ All answered; see `PLAN.md`.
 
 ## Tasks
 
-- [ ] Write the currency adapter layer (`currency`, `unified_money`, `credits` behind one interface).
+- [x] Write the currency adapter layer (`currency`, `unified_money`, `credits`, `items` behind one interface).
 - [ ] Check Technic's recipe registration API for machine recipes.
-- [ ] Add `mod.conf` and `init.lua`.
+- [x] Add `mod.conf` and `init.lua`.
 - [ ] Build the base price list and the recipe-derived pricing.
 - [ ] Build the Buy/Sell formspec with a variable amount.
 - [ ] Verify the `credits_old` item-prefix load failure in a test world.
+- [ ] Test the `credits` V1.2.3 code path in the engine (needs a world with only the old version, and `credits_old` item-prefix handling).
+- [ ] Decide how prices are scaled across currencies (cents vs whole credits vs item units).
+- [ ] Check that `unified_money` accepts the amounts we pass (it may allow fractions; the adapter currently only accepts whole numbers).
+- [ ] Add a `.luarc.json` or `.luacheckrc` so editors know the Minetest globals.

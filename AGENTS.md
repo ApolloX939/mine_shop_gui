@@ -32,8 +32,22 @@ locale/         # optional: translation files
 
 ## Testing and running
 
-- There is no automated test suite yet. To test, enable the mod in a world (Mods tab, or `load_mod_mine_shop_gui = true` in `world.mt`) and launch Minetest. Check `debug.txt` and the in-game console for Lua errors.
-- If linting is added, use `luacheck` with a `.luacheckrc` declaring the Minetest globals.
+- Tests use the `mtt` mod and run inside the real Luanti engine. Do not write your own test harness, mock the Minetest API, or run the code under a standalone Lua interpreter.
+- Tests live in `mtt.lua` (loaded from `init.lua` only when `mtt.enabled`). Register them with `mtt.register(name, function(callback) ... callback() end)`. Use `fakelib` players, not `mtt.join_player` (it fires every mod's join callbacks, and `credits` crashes on fake players).
+- Engine: `C:\Users\Apollo\AppData\Local\luanti\5.18.0\bin\luanti.exe`. Its user folder is `C:\Users\Apollo\AppData\Roaming\Minetest`. Never kill an existing `luanti.exe` process; it is the user's game client.
+- Run in a throwaway world in the scratchpad (never inside the repo). `world.mt` needs `gameid = minetest` and `load_mod_<name> = mods/<name>` entries (paths must be relative to the user folder, not absolute) for: `mine_shop_gui`, `mtt`, `fakelib`, `currency`, `credits`, `unified_money/um_core`, `unified_money/um_backend_plain`. Config file:
+  ```
+  mtt_enable = true
+  mtt_filter = mine_shop_gui
+  mg_name = singlenode
+  mine_shop_gui_item_currency = default:goldblock=9, default:gold_ingot=1
+  ```
+  Command (exit code 0 means every test passed; always use a timeout):
+  ```
+  luanti.exe --server --world <world> --gameid minetest --config <conf> --logfile <log>
+  ```
+- Delete the world's `*.sqlite`, `map*` and `nodenames.txt` between runs.
+- Only one version of `credits` can be present in a world, so the V1.2.3 code path (`credits_old`) is not covered by the automated tests.
 
 ## Working in this repo
 
