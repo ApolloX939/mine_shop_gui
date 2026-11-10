@@ -49,10 +49,20 @@ All three are optional dependencies, reached through one adapter interface.
 - Callers must pass amounts already rounded with `api.round`. Amounts that are not a whole multiple of the currency's smallest unit are rejected, never silently adjusted.
 - `credits` payments spend the digital balance first, then physical stacks. Any surplus from a physical stack is returned to the digital balance, so the shop never has to create valued stacks. Payouts to the player are always digital. (Decided while implementing; revisit if physical change is wanted.)
 
+## Price scaling (decided and implemented)
+
+- The price list uses abstract **price units**, decimals allowed. One unit is the value of one cobblestone.
+- Each currency converts units to its own amounts with a scale: `mine_shop_gui_scale_<currency>`, with defaults of `currency` 5 (cents, so a cobblestone costs the smallest coin), `credits` 1, `unified_money` 1, `items` 0.05 (about 20 cobblestones per item). `api.scale()` reads it.
+- `api.price(units, mode)` is the only place that turns price units into a payable amount. `units` is the buy price times the quantity.
+  - `"buy"`: rounded to the currency's smallest unit, never below one unit (never free unless the price itself is 0).
+  - `"sell"`: the buy price times `mine_shop_gui_sell_ratio` (default 0.5), then scaled and rounded. If that is under one unit the sale is refused with `"too_cheap"`, and the shop should show the item as not sellable.
+- Rounding happens once, on the final total, never per item.
+- Open: `unified_money` may allow fractional balances; its adapter currently treats 1 as the smallest unit.
+
 ## Testing notes
 
 - Tests use `mtt` in the real Luanti engine; see `AGENTS.md` for how to run them.
-- Covered: currency, items, unified_money and credits V1.3. Not covered: credits V1.2.3 (cannot coexist with V1.3 in one world).
+- Covered: currency, items, unified_money, credits V1.3, and price scaling. Tests reset the accounts they use, so the world does not need cleaning between runs. Not covered: credits V1.2.3 (cannot coexist with V1.3 in one world).
 
 
 - `credits_old/mod.conf` was renamed to `name = credits_old` to avoid a load-time name clash. It still registers `credits:` items and the `/credits` command, so it will probably fail to load and conflicts with the new `credits`. Treat it as reference code. Test each credits version in its own world with only that version present.

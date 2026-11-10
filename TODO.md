@@ -20,6 +20,6 @@ All answered; see `PLAN.md`.
 - [ ] Build the Buy/Sell formspec with a variable amount.
 - [ ] Verify the `credits_old` item-prefix load failure in a test world.
 - [ ] Test the `credits` V1.2.3 code path in the engine (needs a world with only the old version, and `credits_old` item-prefix handling).
-- [ ] Decide how prices are scaled across currencies (cents vs whole credits vs item units).
+- [x] Decide how prices are scaled across currencies (cents vs whole credits vs item units). See `PLAN.md`.
 - [ ] Check that `unified_money` accepts the amounts we pass (it may allow fractions; the adapter currently only accepts whole numbers).
 - [ ] Add a `.luarc.json` or `.luacheckrc` so editors know the Minetest globals.

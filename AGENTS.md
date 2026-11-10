@@ -46,7 +46,7 @@ locale/         # optional: translation files
   ```
   luanti.exe --server --world <world> --gameid minetest --config <conf> --logfile <log>
   ```
-- Delete the world's `*.sqlite`, `map*` and `nodenames.txt` between runs.
+- Account balances persist in the world between runs. Tests that touch a balance (`unified_money`, `credits`) must reset it at the start (see `reset_credits` in `mtt.lua`), so runs never depend on a clean world.
 - Only one version of `credits` can be present in a world, so the V1.2.3 code path (`credits_old`) is not covered by the automated tests.
 
 ## Working in this repo
