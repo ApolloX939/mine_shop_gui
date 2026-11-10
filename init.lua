@@ -23,6 +23,14 @@ mine_shop_gui.pricing = {
 	base_prices = dofile(mine_shop_gui.modpath .. "/src/pricing/base_prices.lua"),
 }
 
+dofile(mine_shop_gui.modpath .. "/src/pricing/generate.lua")
+
+-- Build prices once every mod (and every on_mods_loaded callback, including
+-- Technic's own recipe registration) is done.
+core.register_on_mods_loaded(function()
+	core.after(0, function() mine_shop_gui.pricing.generate() end)
+end)
+
 -- Integration tests, only when the mtt test framework is enabled.
 if core.get_modpath("mtt") and mtt and mtt.enabled then
 	load("mtt")

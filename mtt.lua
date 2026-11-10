@@ -577,3 +577,235 @@ mtt.register("price files: the shipped files apply only to what is installed", f
 	assert(#unknown == 0, "shipped prices name unknown items: " .. table.concat(unknown, ", "))
 	callback()
 end)
+
+---------------------------------------------------------------- flags (derivation)
+
+mtt.register("flags: a derived item inherits flags from its ingredients", function(callback)
+	local prices, _, _, flags = derive({
+		base = { ["t:a"] = 1, ["t:b"] = 1, ["t:c"] = 1 },
+		flags = { ["t:a"] = { no_buy = true }, ["t:b"] = { no_sell = true } },
+		recipes = {
+			recipe("normal", { { "t:a" }, { "t:b" } }, "t:ab"),
+			recipe("normal", { { "t:ab" }, { "t:c" } }, "t:abc"),
+			recipe("normal", { { "t:c", 2 } }, "t:cc"),
+		},
+	})
+	assert(near(prices["t:ab"], 2), "still priced")
+	assert(flags["t:ab"].no_buy and flags["t:ab"].no_sell, "both flags reach the result")
+	assert(flags["t:abc"].no_buy and flags["t:abc"].no_sell, "and the result of the result")
+	assert(flags["t:cc"] == nil, "unflagged ingredients give no flags")
+	assert(flags["t:a"].no_buy and not flags["t:a"].no_sell, "own flags stay as they are")
+	callback()
+end)
+
+mtt.register("flags: an item's own flags are kept and added to inherited ones", function(callback)
+	local _, _, _, flags = derive({
+		base = { ["t:a"] = 1, ["t:c"] = 1 },
+		flags = { ["t:a"] = { no_buy = true }, ["t:x"] = { no_sell = true } },
+		recipes = { recipe("normal", { { "t:a" }, { "t:c" } }, "t:x") },
+	})
+	assert(flags["t:x"].no_buy and flags["t:x"].no_sell)
+	callback()
+end)
+
+mtt.register("flags: they follow the cheapest route", function(callback)
+	local _, _, _, flags = derive({
+		base = { ["t:flagged"] = 1, ["t:plain"] = 3 },
+		flags = { ["t:flagged"] = { no_buy = true } },
+		recipes = {
+			recipe("normal", { { "t:flagged" } }, "t:cheap_flagged"),
+			recipe("normal", { { "t:plain" } }, "t:cheap_flagged"),
+			recipe("normal", { { "t:flagged", 5 } }, "t:cheap_plain"),
+			recipe("alloy", { { "t:plain" } }, "t:cheap_plain"),
+		},
+	})
+	assert(flags["t:cheap_flagged"] and flags["t:cheap_flagged"].no_buy, "cheapest route is flagged")
+	assert(flags["t:cheap_plain"] == nil, "cheapest route is unflagged")
+	callback()
+end)
+
+mtt.register("flags: a group ingredient passes on the flags of the member used", function(callback)
+	local _, _, _, flags = derive({
+		base = { ["t:oak"] = 4, ["t:pine"] = 2 },
+		groups = { wood = { "t:oak", "t:pine" } },
+		flags = { ["t:oak"] = { no_buy = true } },
+		recipes = { recipe("normal", { { group = "wood", count = 1 } }, "t:chest") },
+	})
+	assert(flags["t:chest"] == nil, "pine is cheaper and unflagged")
+	callback()
+end)
+
+---------------------------------------------------------------- flags (items and stacks)
+
+local collect = mine_shop_gui.pricing.collect
+
+mtt.register("flags: item definitions set them with _mine_shop_gui", function(callback)
+	local f = collect.flags_from_def({ _mine_shop_gui = { no_buy = true } })
+	assert(f.no_buy and not f.no_sell)
+	f = collect.flags_from_def({ _mine_shop_gui = { no_sell = true, no_buy = true } })
+	assert(f.no_buy and f.no_sell)
+	assert(collect.flags_from_def({}) == nil)
+	assert(collect.flags_from_def({ _mine_shop_gui = {} }) == nil)
+	assert(collect.flags_from_def({ _mine_shop_gui = "yes" }) == nil)
+	callback()
+end)
+
+mtt.register("flags: stack metadata sets them (strings and integers)", function(callback)
+	local stack = ItemStack("default:stone")
+	local f = collect.stack_flags(stack)
+	assert(f.no_buy == false and f.no_sell == false)
+
+	stack:get_meta():set_string("no_sell", "true")
+	stack:get_meta():set_int("no_buy", 1)
+	f = collect.stack_flags(stack)
+	assert(f.no_sell == true and f.no_buy == true)
+
+	stack:get_meta():set_string("no_sell", "false")
+	stack:get_meta():set_int("no_buy", 0)
+	f = collect.stack_flags(stack)
+	assert(f.no_sell == false and f.no_buy == false, "false and 0 do not count")
+	assert(stack:get_meta().set_bool == nil, "metadata really has no set_bool")
+	callback()
+end)
+
+---------------------------------------------------------------- collector (real recipes)
+
+mtt.register("collector: reads real recipes, groups and Minetest Game crafts", function(callback)
+	local recipes = collect.recipes()
+	assert(#recipes > 100, "recipes: " .. #recipes)
+
+	local found_cooking, found_sticks
+	for _, r in ipairs(recipes) do
+		assert(core.registered_items[r.output.name], "unregistered output " .. r.output.name)
+		assert(r.output.count >= 1 and #r.inputs >= 1)
+		for _, input in ipairs(r.inputs) do
+			assert(input.name or input.group)
+			assert(input.count >= 1)
+		end
+		if r.type == "cooking" and r.output.name == "default:stone"
+				and r.inputs[1].name == "default:cobble" then
+			found_cooking = true
+		end
+		if r.output.name == "default:stick" and r.output.count == 4
+				and r.inputs[1].group == "wood" then
+			found_sticks = true
+		end
+	end
+	assert(found_cooking, "cobble -> stone smelting recipe")
+	assert(found_sticks, "4 sticks from group:wood")
+
+	local groups = collect.groups(recipes)
+	local wood = groups["wood"]
+	assert(wood, "group wood is used by recipes")
+	local has_wood = false
+	for _, name in ipairs(wood) do
+		if name == "default:wood" then has_wood = true end
+	end
+	assert(has_wood, "default:wood is in group wood")
+	callback()
+end)
+
+---------------------------------------------------------------- generation and hook
+
+mtt.register("generate: real prices for Minetest Game", function(callback)
+	local pricing = mine_shop_gui.pricing
+	local items, report = pricing.generate()
+	assert(#report.dropped == 0, "unstable items: " .. table.concat(report.dropped, ", "))
+	assert(items["default:cobble"].price == 1 and items["default:cobble"].source == "base")
+	assert(near(items["default:stone"].price, 1) and items["default:stone"].source == "cooking")
+	assert(near(items["default:wood"].price, 1), "4 planks from a 4-unit log")
+	assert(near(items["default:stick"].price, 0.25), "4 sticks from one plank")
+	assert(near(items["default:steel_ingot"].price, 16), "smelted from an iron lump")
+	for name, entry in pairs(items) do
+		assert(entry.price >= 0 and entry.price < math.huge, name)
+		assert(entry.no_buy == false and entry.no_sell == false,
+			name .. " has flags in plain Minetest Game")
+	end
+	callback()
+end)
+
+mtt.register("generate: markup setting applies per recipe type", function(callback)
+	core.settings:set("mine_shop_gui_markup_cooking", "50")
+	local ok, err = pcall(function()
+		local items = mine_shop_gui.pricing.generate()
+		assert(near(items["default:steel_ingot"].price, 24), "16 + 50%")
+		assert(near(items["default:wood"].price, 1), "crafting markup is still 0")
+	end)
+	core.settings:remove("mine_shop_gui_markup_cooking")
+	assert(ok, err)
+	callback()
+end)
+
+mtt.register("hook: runs after the collector and can change, remove, add and flag", function(callback)
+	local pricing = mine_shop_gui.pricing
+	local seen_before_hook
+	local items = pricing.generate({
+		base = { ["default:stone"] = 2, ["default:dirt"] = 3, ["default:sand"] = 4 },
+		recipes = {}, groups = {}, flags = {},
+		hooks = {
+			function(t)
+				seen_before_hook = t["default:stone"] and t["default:stone"].price
+				t["default:stone"].price = 10
+				t["default:dirt"] = nil
+				t["default:gravel"] = { price = 7 }
+				t["default:sand"].no_sell = true
+			end,
+			function(t)
+				-- later hooks see earlier changes
+				t["default:gravel"].price = t["default:gravel"].price + 1
+			end,
+		},
+	})
+	assert(seen_before_hook == 2, "hook saw the derived price")
+	assert(items["default:stone"].price == 10)
+	assert(items["default:dirt"] == nil)
+	assert(items["default:gravel"].price == 8 and items["default:gravel"].source == "hook")
+	assert(items["default:gravel"].no_buy == false)
+	assert(items["default:sand"].no_sell == true and items["default:sand"].no_buy == false)
+	callback()
+end)
+
+mtt.register("hook: bad entries are dropped and a failing hook does not stop others", function(callback)
+	local items = mine_shop_gui.pricing.generate({
+		base = { ["default:stone"] = 2 },
+		recipes = {}, groups = {}, flags = {},
+		hooks = {
+			function() error("boom") end,
+			function(t)
+				t["default:dirt"] = { price = -1 }
+				t["default:sand"] = { price = "free" }
+				t["mod_that_is_not_installed:thing"] = { price = 5 }
+				t["default:gravel"] = 5
+				t["default:clay_lump"] = { price = 3 }
+			end,
+		},
+	})
+	assert(items["default:stone"].price == 2)
+	assert(items["default:dirt"] == nil and items["default:sand"] == nil)
+	assert(items["mod_that_is_not_installed:thing"] == nil and items["default:gravel"] == nil)
+	assert(items["default:clay_lump"].price == 3, "the good entry from the same hook survives")
+	callback()
+end)
+
+mtt.register("trade checks: flags on items and on stacks", function(callback)
+	local pricing = mine_shop_gui.pricing
+	pricing.generate({
+		base = { ["default:stone"] = 1, ["default:dirt"] = 1, ["default:sand"] = 1 },
+		recipes = {}, groups = {},
+		flags = { ["default:dirt"] = { no_sell = true }, ["default:sand"] = { no_buy = true } },
+		hooks = {},
+	})
+	assert(pricing.can_buy("default:stone") and pricing.can_sell(ItemStack("default:stone")))
+	assert(pricing.can_buy("default:dirt") and not pricing.can_sell(ItemStack("default:dirt")))
+	assert(not pricing.can_buy("default:sand") and pricing.can_sell(ItemStack("default:sand")))
+	assert(not pricing.can_buy("default:gravel"), "unpriced items cannot be bought")
+	assert(not pricing.can_sell(ItemStack("default:gravel")), "or sold")
+
+	local flagged = ItemStack("default:stone")
+	flagged:get_meta():set_string("no_sell", "true")
+	assert(not pricing.can_sell(flagged), "this stack cannot be sold")
+	assert(pricing.can_sell(ItemStack("default:stone")), "other stone still can")
+
+	pricing.generate() -- back to the real prices
+	callback()
+end)

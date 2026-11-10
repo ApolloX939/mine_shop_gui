@@ -17,6 +17,18 @@ mine_shop_gui_scale_unified_money (Scale: unified_money) float 1 0.0001
 mine_shop_gui_scale_credits (Scale: credits) float 1 0.0001
 mine_shop_gui_scale_items (Scale: item currency) float 0.05 0.0001
 
+[Pricing]
+
+# Percentage added to the cost of items made with each recipe type.
+# 0 means an item costs exactly its ingredients divided by the output count.
+mine_shop_gui_markup_normal (Markup: crafting, %) float 0 0 1000
+mine_shop_gui_markup_cooking (Markup: smelting, %) float 0 0 1000
+mine_shop_gui_markup_alloy (Markup: Technic alloying, %) float 0 0 1000
+mine_shop_gui_markup_grinding (Markup: Technic grinding, %) float 0 0 1000
+mine_shop_gui_markup_compressing (Markup: Technic compressing, %) float 0 0 1000
+mine_shop_gui_markup_extracting (Markup: Technic extracting, %) float 0 0 1000
+mine_shop_gui_markup_freezing (Markup: Technic freezing, %) float 0 0 1000
+
 [Item currency]
 
 # Use ordinary items as money, for example emeralds under Mineclonia or VoxeLibre.
