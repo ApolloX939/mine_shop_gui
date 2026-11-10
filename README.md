@@ -7,7 +7,7 @@ A shop for Luanti (Minetest). Players open it with `/shop`, browse items by cate
 Type `/shop`, or `/shop <words>` to jump straight to a search.
 
 1. **Categories.** One per mod (small mods are grouped under "Other"), plus "Everything". There is a search box.
-2. **Items.** A grid of item pictures. The price to buy is under each one; hover for the name, the buy price, and the sell price.
+2. **Items.** A grid of item pictures with the name and the price to buy under each one; hover for the sell price too. Prices and your balance are shown with a small picture of the currency (for example the Minegeld note).
 3. **Trade.** Pick an amount with the `-64 -10 -1 +1 +10 +64` buttons or type it. The total is shown, then **BUY**, **SELL**, or **SELL ALL**.
 
 Buying and selling are all-or-nothing. If the goods do not fit, or the money cannot be taken, nothing changes. Tools with wear and stacks marked as unsellable are never taken.

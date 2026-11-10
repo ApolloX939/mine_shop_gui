@@ -17,6 +17,9 @@
 --   snapshot(player)        remember everything a payment could change
 --   restore(player, snap)   put it back (used to undo a payment when the goods
 --                           cannot be delivered)
+--   number(amount)          the amount as plain text, no currency name (default: format)
+--   format_symbol(amount)   the amount with a short currency mark, for text ("$1.25")
+--   icon()                  an item that stands for the currency, or nil
 --   unit()                  smallest amount the adapter can pay (a whole number)
 --   default_scale           currency amount per price unit; overridden by the
 --                           `mine_shop_gui_scale_<name>` setting
@@ -150,6 +153,28 @@ end
 
 function api.restore(player, snapshot)
 	if api.active and snapshot ~= nil then api.active.restore(player, snapshot) end
+end
+
+-- The amount as plain text without a currency name, for drawing next to an icon.
+function api.number(amount)
+	local adapter = api.active
+	if not adapter then return tostring(amount) end
+	return (adapter.number or adapter.format)(amount)
+end
+
+-- The amount with a short currency mark, for places that only hold text.
+function api.format_symbol(amount)
+	local adapter = api.active
+	if not adapter then return tostring(amount) end
+	return (adapter.format_symbol or adapter.format)(amount)
+end
+
+-- An item that stands for the active currency (shown next to prices), or nil.
+function api.icon()
+	local adapter = api.active
+	local icon = adapter and adapter.icon and adapter.icon()
+	if icon and core.registered_items[icon] then return icon end
+	return nil
 end
 
 function api.format(amount)

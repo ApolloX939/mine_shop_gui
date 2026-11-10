@@ -21,6 +21,8 @@ local adapter = mine_shop_gui.currency_denominations.new({
 	format = function(cents)
 		return string.format("%d.%02d", math.floor(cents / 100), cents % 100)
 	end,
+	icon = "currency:minegeld", -- the 1.00 note
+	symbol = "$", symbol_first = true,
 })
 
 -- Only offer this adapter when the mod itself is present.

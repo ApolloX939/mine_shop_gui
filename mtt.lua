@@ -1572,6 +1572,8 @@ end)
 
 ---------------------------------------------------------------- shop: window syntax (formspec_ast)
 
+local check_syntax -- defined below when formspec_ast is installed
+
 if core.get_modpath("formspec_ast") then
 
 -- Every element the window builder writes must survive parsing: the parser
@@ -1591,7 +1593,7 @@ local function parsed(tree)
 	return counts
 end
 
-local function check_syntax(spec, what)
+function check_syntax(spec, what)
 	local tree = formspec_ast.parse(spec)
 	assert(tree, what .. ": the parser rejected the window")
 	local want, got = written(spec), parsed(tree)
@@ -1632,6 +1634,125 @@ mtt.register("shop window: every screen is valid formspec syntax", function(call
 			ui.state("shop_syntax").message = { ok = false, text = "a message, with [brackets]; and commas" }
 			ui.show("shop_syntax")
 			check_syntax(sent.shop_syntax, "trade with a message")
+		end)
+	end)
+	restore()
+	assert(ok, err)
+	callback()
+end)
+
+end
+
+---------------------------------------------------------------- shop: currency picture and symbol
+
+mtt.register("currency icons: each adapter names a picture and a text mark", function(callback)
+	local c = use("currency")
+	assert(api.icon() == "currency:minegeld", "the 1.00 note stands for Minegeld")
+	assert(c.number(125) == "1.25" and c.format_symbol(125) == "$1.25")
+
+	local items = use("items")
+	assert(api.icon() == "default:gold_ingot", "an item currency is shown by its smallest item: " .. tostring(api.icon()))
+	assert(items.number(7) == "7")
+	core.settings:set("mine_shop_gui_item_currency_label", "Gold")
+	local text = items.format_symbol(7)
+	core.settings:remove("mine_shop_gui_item_currency_label")
+	assert(text == "7 Gold", "the label is the mark: " .. text)
+
+	if api.adapters.credits.available() then
+		local cr = use("credits")
+		assert(api.icon() == "credits:credits" and cr.format_symbol(15) == "15 cr" and api.number(15) == "15")
+	end
+	if api.adapters.unified_money.available() then
+		local um = use("unified_money")
+		assert(api.icon() == nil, "Unified Money has no item")
+		assert(um.format_symbol(15) == "$15" and api.number(15) == "15")
+	end
+	api.resolve()
+	callback()
+end)
+
+mtt.register("currency icons: an icon that is not a registered item is ignored", function(callback)
+	local fake = { name = "icon_test", icon = function() return "no_such_mod:coin" end,
+		format = function(n) return tostring(n) end }
+	local before = api.active
+	api.active = fake
+	local ok = api.icon() == nil and api.number(5) == "5" and api.format_symbol(5) == "5"
+	api.active = before
+	assert(ok)
+	api.active = nil
+	assert(api.icon() == nil and api.number(5) == "5" and api.format_symbol(5) == "5", "no currency at all")
+	api.resolve()
+	callback()
+end)
+
+mtt.register("shop window: prices and balance are drawn with the currency picture", function(callback)
+	use("currency")
+	pricing_api.generate()
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		with_player("shop_icon1", function(_, inv)
+			inv:set_stack("main", 1, ItemStack("currency:minegeld"))
+			ui.open("shop_icon1")
+			assert(sent.shop_icon1:find("item_image[10.9,0.45;0.5,0.5;currency:minegeld]", 1, true),
+				"the balance has the note beside it")
+			assert(sent.shop_icon1:find("label[11.5,0.7;1.00]", 1, true), "followed by the number")
+
+			ui.open("shop_icon1", "cobble")
+			local _, count = sent.shop_icon1:gsub("item_image%[[%d%.]+,[%d%.]+;0%.5,0%.5;currency:minegeld%]", "")
+			assert(count == 1 + #ui.state("shop_icon1").page_items, "one in the header and one per priced item: " .. count)
+
+			click("shop_icon1", { [pick_item("shop_icon1", "default:cobble")] = "" })
+			assert(sent.shop_icon1:find("Buy (each):", 1, true) and sent.shop_icon1:find("You pay:", 1, true))
+			assert(sent.shop_icon1:find("item_image[6.3,2.35;0.5,0.5;currency:minegeld]", 1, true),
+				"the price per item has the note beside it")
+			click("shop_icon1", { amount = "4", buy = "BUY" })
+			assert(sent.shop_icon1:find("Bought", 1, true) and sent.shop_icon1:find("$0.20", 1, true),
+				"messages use the text mark")
+		end)
+	end)
+	restore()
+	assert(ok, err)
+	callback()
+end)
+
+mtt.register("shop window: a currency without an item uses its text mark", function(callback)
+	if not api.adapters.unified_money.available() then callback() return end
+	use("unified_money")
+	pricing_api.generate()
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		with_player("shop_icon2", function()
+			unified_money.set_balance_safe("shop_icon2", 40)
+			ui.open("shop_icon2")
+			-- formspec text escapes the dollar sign as \$, which the client shows as $
+			assert(sent.shop_icon2:find([=[label[10.9,0.7;\$40]]=], 1, true), "balance as text: " .. sent.shop_icon2:sub(1, 300))
+			assert(not sent.shop_icon2:find("item_image[", 1, true), "no currency picture (the category buttons are separate)")
+			ui.open("shop_icon2", "cobble")
+			click("shop_icon2", { [pick_item("shop_icon2", "default:cobble")] = "" })
+			assert(sent.shop_icon2:find("$1", 1, true), "prices with the dollar mark")
+		end)
+	end)
+	restore()
+	api.resolve()
+	assert(ok, err)
+	callback()
+end)
+
+if core.get_modpath("formspec_ast") then
+
+mtt.register("shop window: the currency pictures keep the syntax valid", function(callback)
+	use("currency")
+	pricing_api.generate()
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		with_player("shop_icon3", function(_, inv)
+			inv:set_stack("main", 1, ItemStack("currency:minegeld"))
+			ui.open("shop_icon3")
+			check_syntax(sent.shop_icon3, "categories with balance picture")
+			ui.open("shop_icon3", "cobble")
+			check_syntax(sent.shop_icon3, "items with price pictures")
+			click("shop_icon3", { [pick_item("shop_icon3", "default:cobble")] = "" })
+			check_syntax(sent.shop_icon3, "trade with price pictures")
 		end)
 	end)
 	restore()

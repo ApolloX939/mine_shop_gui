@@ -6,6 +6,10 @@
 --   get_denominations = function() return { {name = "mod:item", value = 5}, ... } end,
 --   format = function(amount) return "..." end,    -- optional
 --   default_scale = 5,                             -- currency amount per price unit
+--   icon = "mod:item",                             -- optional: picture for the currency
+--                                                  (default: the smallest denomination)
+--   symbol = "$", symbol_first = true,             -- optional: short mark for text
+--   number = function(amount) return "..." end,   -- optional: amount without any currency name
 --   warn_missing = true,                           -- optional: log denominations whose item is not registered
 -- }
 --
@@ -171,6 +175,20 @@ function M.new(def)
 	end
 
 	self.format = def.format or function(amount) return tostring(amount) end
+	self.number = def.number or self.format
+
+	function self.icon()
+		if def.icon then return def.icon end
+		local list = resolved().list
+		return list[#list] and list[#list].name -- sorted largest first, so this is the smallest
+	end
+
+	function self.format_symbol(amount)
+		local number = self.number(amount)
+		if not def.symbol or def.symbol == "" then return self.format(amount) end
+		if def.symbol_first then return def.symbol .. number end
+		return number .. " " .. def.symbol
+	end
 
 	return self
 end

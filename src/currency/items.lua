@@ -33,6 +33,7 @@ local adapter = mine_shop_gui.currency_denominations.new({
 		end
 		return tostring(amount)
 	end,
+	number = function(amount) return tostring(amount) end,
 })
 
 mine_shop_gui.currency.register(adapter)

@@ -64,4 +64,13 @@ function adapter.format(amount)
 	return tostring(amount)
 end
 
+-- Unified Money has no item for its money, so prices carry a text mark instead.
+function adapter.format_symbol(amount)
+	return "$" .. tostring(amount)
+end
+
+function adapter.icon()
+	return nil
+end
+
 mine_shop_gui.currency.register(adapter)

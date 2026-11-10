@@ -139,4 +139,12 @@ function adapter.format(amount)
 	return tostring(amount)
 end
 
+function adapter.format_symbol(amount)
+	return tostring(amount) .. " cr"
+end
+
+function adapter.icon()
+	return "credits:credits"
+end
+
 mine_shop_gui.currency.register(adapter)

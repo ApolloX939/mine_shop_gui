@@ -35,8 +35,24 @@ local REASONS = {
 	unavailable = S("The shop cannot do that right now."),
 }
 
+-- An amount as text, with the currency mark (tooltips and messages).
 local function money(amount)
-	return api.format(amount)
+	return api.format_symbol(amount)
+end
+
+-- An amount drawn as the currency's picture followed by the number, on a row
+-- 0.5 high whose top edge is at y. Without a picture the text form is used.
+local ICON_SIZE = 0.5
+local function money_widget(x, y, amount)
+	if amount == nil then
+		return string.format("label[%g,%g;-]", x, y + ICON_SIZE / 2)
+	end
+	local icon = api.icon()
+	if not icon then
+		return string.format("label[%g,%g;%s]", x, y + ICON_SIZE / 2, esc(money(amount)))
+	end
+	return string.format("item_image[%g,%g;%g,%g;%s]label[%g,%g;%s]", x, y, ICON_SIZE, ICON_SIZE, esc(icon),
+		x + ICON_SIZE + 0.1, y + ICON_SIZE / 2, esc(api.number(amount)))
 end
 
 -- Cut text to `limit` characters (not bytes, so accents survive), ending in "..".
@@ -65,7 +81,8 @@ local function header(name, title)
 	return table.concat({
 		"formspec_version[6]size[15,11]",
 		"label[0.5,0.7;", esc(title), "]",
-		"label[9.4,0.7;", esc(S("Balance: @1", balance and money(balance) or "?")), "]",
+		"label[9.4,0.7;", esc(S("Balance:")), "]",
+		money_widget(10.9, 0.45, balance),
 	})
 end
 
@@ -144,7 +161,7 @@ local function items_screen(name, state)
 		out[#out + 1] = string.format("item_image_button[%g,%g;1.5,1.5;%s;item_%d;]", x + 0.4, y, esc(record.name), i)
 		out[#out + 1] = string.format("tooltip[item_%d;%s]", i, esc(tooltip_for(record)))
 		out[#out + 1] = string.format("label[%g,%g;%s]", x + 0.1, y + 1.85, esc(shorten(record.title, 16)))
-		out[#out + 1] = string.format("label[%g,%g;%s]", x + 0.1, y + 2.3, esc(buy and money(buy) or "-"))
+		out[#out + 1] = money_widget(x + 0.1, y + 2.05, buy)
 	end
 	out[#out + 1] = paging(page, pages)
 	return table.concat(out)
@@ -162,15 +179,18 @@ local function trade_screen(name, state)
 	-- prices for one
 	local buy_one = trade.quote(item, 1, "buy")
 	local sell_one = trade.quote(item, 1, "sell")
-	out[#out + 1] = "label[4,2.6;" .. esc(buy_one and S("Buy: @1 each", money(buy_one)) or S("Not sold by the shop")) .. "]"
-	local sell_line
+	if buy_one then
+		out[#out + 1] = "label[4,2.6;" .. esc(S("Buy (each):")) .. "]" .. money_widget(6.3, 2.35, buy_one)
+	else
+		out[#out + 1] = "label[4,2.6;" .. esc(S("Not sold by the shop")) .. "]"
+	end
 	if sell_one then
-		sell_line = S("Sell: @1 each", money(sell_one))
+		out[#out + 1] = "label[4,3.3;" .. esc(S("Sell (each):")) .. "]" .. money_widget(6.3, 3.05, sell_one)
 	else
 		local from = entry and not entry.no_sell and trade.min_sell_amount(item)
-		sell_line = from and S("Sell: only @1 or more at once", from) or S("The shop does not buy this")
+		out[#out + 1] = "label[4,3.3;" .. esc(from and S("Sell: only @1 or more at once", from)
+			or S("The shop does not buy this")) .. "]"
 	end
-	out[#out + 1] = "label[4,3.3;" .. esc(sell_line) .. "]"
 	out[#out + 1] = "label[4,4.0;" .. esc(S("You hold: @1", held)) .. "]"
 
 	-- amount
@@ -186,17 +206,17 @@ local function trade_screen(name, state)
 	local buy_total = trade.quote(item, amount, "buy")
 	local sell_total = trade.quote(item, amount, "sell")
 	if buy_total then
-		out[#out + 1] = "label[1,6.8;" .. esc(S("Total to buy: @1", money(buy_total))) .. "]"
+		out[#out + 1] = "label[1,6.8;" .. esc(S("You pay:")) .. "]" .. money_widget(2.4, 6.55, buy_total)
 		out[#out + 1] = string.format("button[1,7.5;3.6,1;buy;%s]", esc(S("BUY")))
 	end
 	if sell_total then
-		out[#out + 1] = "label[5.4,6.8;" .. esc(S("You would receive: @1", money(sell_total))) .. "]"
+		out[#out + 1] = "label[5.4,6.8;" .. esc(S("You get:")) .. "]" .. money_widget(6.8, 6.55, sell_total)
 		out[#out + 1] = string.format("button[5.4,7.5;3.6,1;sell;%s]", esc(S("SELL")))
 	end
 	local all_total = held > 0 and trade.quote(item, held, "sell")
 	if all_total then
 		out[#out + 1] = string.format("button[9.8,7.5;4.2,1;sellall;%s]", esc(S("SELL ALL (@1)", held)))
-		out[#out + 1] = "label[9.8,6.8;" .. esc(S("All: @1", money(all_total))) .. "]"
+		out[#out + 1] = "label[9.8,6.8;" .. esc(S("All:")) .. "]" .. money_widget(10.6, 6.55, all_total)
 	end
 
 	if state.message then
