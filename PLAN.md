@@ -240,6 +240,23 @@ Some machine combinations gain value: Technic's compressor turns 2 sand into 1 s
 
 A property test checks that after generation no recipe makes an item for less than its price, except for fixed prices and items held in a loop.
 
+### Remaining content prices (drafted by Claude, open to adjustment)
+
+Coverage in the 51-mod world: 2274 of 2421 visible items are priced (94%), with no unknown names and no unstable loops.
+
+Added in this pass:
+- `prices/games/minetest.lua`: bush leaves, needles, stems (2) and saplings (3); grasses, ferns and kelp (1); grass, litter, savanna and permafrost soils (1); apple and blueberries (2); corals and coral skeleton (2); wheat and cotton seeds (1) and wild cotton (3); captured butterflies and fireflies (3); river water bucket (27) and lava bucket (30), meaning an empty bucket (24) plus contents.
+- `prices/mods/bakedclay.lua` (4 items at 2). Ethereal registers the same nodes itself when the real `bakedclay` mod is absent, so the same four lines are also in `ethereal.lua`.
+- `prices/mods/everness.lua`: lava and mineral water buckets (30, 27).
+- `prices/mods/technic_worldgen.lua`: rubber tree leaves (1) and sapling (3).
+- `prices/mods/techage.lua`: `techage:bauxite_stone` (1), a worldgen stone only reachable by uncrafting slabs.
+- `prices/mods/technic.lua`: the 35 enrichment dusts of uranium (`uranium0_dust` to `uranium35_dust`, natural uranium 7 excluded) at 30 * (0.5 + percent / 14), so 15 for 0% up to 90 for 3.5%. The centrifuge that makes them has two outputs, so they cannot be derived. Their ingots and the fuel are priced from them.
+
+Deliberately unpriced (a missing price means the item cannot be traded):
+- **Money:** every `currency` note and coin, and `credits:credits`.
+- **Not goods:** ore nodes, liquid sources, fire and flames, bones, admin and test blocks, power and oil sources, wrench, prospector, sonic screwdriver, and filled barrels, canisters and cylinders (apart from the four recipes need).
+- **Cannot be made here:** mithril and nether armor and shields (need ingots from mods that are not installed); Technic's red and blue energy crystals, silver and mithril chests and dusts (need `moreores`); Ethereal's cooked dishes and Techage's sieve machines; pipeworks deployers and similar (their recipes need `mesecons`); everything that needs rice, soy sauce, sugar, garlic or a saucepan group from food mods that are not installed. If those mods are added, recipes will price what they can, and the rest needs a price file.
+
 ### Result on the 51-mod test world
 
 2707 recipes read (2474 crafting, 104 smelting, 83 grinding, 17 compressing, 14 alloy, 14 extracting, 1 freezing). 410 items priced, no unstable loops. 1480 craftable items are still unpriced because something they need has no price: mostly stairs (464), Techage (263), Everness (197), Technic machines (182), Ethereal (158). Natural default items that need anchors are clay lump, cactus, papyrus, ice, snow, obsidian and the farming crops (wheat, cotton, string).

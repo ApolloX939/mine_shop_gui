@@ -23,10 +23,10 @@ All answered; see `PLAN.md`.
 - [x] Ethereal prices (`prices/mods/ethereal.lua`), drafted by Claude: review the values.
 - [x] Everness prices (`prices/mods/everness.lua`), drafted by Claude: review the values.
 - [x] Techage prices (`prices/mods/techage.lua`), drafted by Claude: review the values. Tiers climb about 3 to 4 times each.
-- [ ] Decide prices for other content mods that still have unpriced raw items (the leftover `default` items such as bush stems, 3d_armor, pipeworks, hyperloop, signs_bot, currency).
+- [x] Remaining raw items priced where they can be traded; the rest is deliberately unpriced (see `PLAN.md`, "Remaining content prices"). 94% of visible items in the 51-mod world are priced.
 - [x] Base prices are ceilings, with `fixed = true` for anchors (decided). Gaining loops are cut. See `PLAN.md`.
 - [x] Two genuine gaining loops remain in Technic + Techage worlds (sand, sandstone and silver sand, stone, stone dust). Decided: only warn the owner (a warning in the server log at startup, naming each item, its price and what machines can make it for). The shop prices are not changed.
-- [ ] Price `techage:bauxite_stone` and its slabs, if you want them traded. Techage chips and aluminium block the most recipes; the empty bucket needs `techage:iron_ingot`.
+- [x] Price `techage:bauxite_stone` (done), plus Techage's chips, aluminium and `techage:iron_ingot` (done earlier).
 - [x] Price `techage:iron_ingot` at 16: this unlocked the empty and water buckets and the Ethereal crystal chain.
 - [x] Techage machine recipes: fabricators, doser (own API) and melting pot, furnace, grinder, mill (via `unified_inventory`).
 - [ ] Torches come out at 0.56 each because the cheapest member of group `charcoal` (priced 2) beats coal (8). Decide if group pricing needs a rule (for example ignore groups wider than N members).
