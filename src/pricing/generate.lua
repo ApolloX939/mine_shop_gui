@@ -122,9 +122,18 @@ function P.generate(opts)
 			.. "the largest drop is '" .. lowered_list[1].item .. "' (" .. lowered_list[1].base
 			.. " to " .. string.format("%.2f", lowered_list[1].route) .. ")")
 	end
-	for _, gap in ipairs(held_list) do
-		log("info", "'" .. gap.item .. "' is held at " .. string.format("%.2f", gap.base)
-			.. " because its recipes loop and gain value; one recipe makes it for " .. string.format("%.2f", gap.route))
+	-- A loop of machine recipes that gains value cannot be priced fairly: the
+	-- shop holds the item at one price while the machines can make it cheaper.
+	-- Players who have all these mods can profit outside the shop, which only
+	-- the server owner can fix (remove a recipe, or change the mods). Say so.
+	if #held_list > 0 then
+		log("warning", #held_list .. " item(s) are part of a recipe loop that gains value, so players "
+			.. "can make them for less than the shop pays for them. Remove one of the recipes or "
+			.. "mods involved, or lower the price in a price file. See the lines below.")
+		for _, gap in ipairs(held_list) do
+			log("warning", "  '" .. gap.item .. "' is priced at " .. string.format("%.2f", gap.base)
+				.. " but machines can make it for " .. string.format("%.2f", gap.route))
+		end
 	end
 	for _, gap in ipairs(below_base) do
 		log("warning", "fixed price of '" .. gap.item .. "' (" .. gap.base .. ") is above the cost of making it ("

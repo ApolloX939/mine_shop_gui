@@ -25,7 +25,7 @@ All answered; see `PLAN.md`.
 - [x] Techage prices (`prices/mods/techage.lua`), drafted by Claude: review the values. Tiers climb about 3 to 4 times each.
 - [ ] Decide prices for other content mods that still have unpriced raw items (the leftover `default` items such as bush stems, 3d_armor, pipeworks, hyperloop, signs_bot, currency).
 - [x] Base prices are ceilings, with `fixed = true` for anchors (decided). Gaining loops are cut. See `PLAN.md`.
-- [ ] Two genuine gaining loops remain in Technic + Techage worlds (sand, sandstone and silver sand, stone, stone dust). Sand and silver sand are held at 1, so a player with both mods could still profit by compressing and grinding outside the shop. Decide whether to lower those two or warn the owner.
+- [x] Two genuine gaining loops remain in Technic + Techage worlds (sand, sandstone and silver sand, stone, stone dust). Decided: only warn the owner (a warning in the server log at startup, naming each item, its price and what machines can make it for). The shop prices are not changed.
 - [ ] Price `techage:bauxite_stone` and its slabs, if you want them traded. Techage chips and aluminium block the most recipes; the empty bucket needs `techage:iron_ingot`.
 - [x] Price `techage:iron_ingot` at 16: this unlocked the empty and water buckets and the Ethereal crystal chain.
 - [x] Techage machine recipes: fabricators, doser (own API) and melting pot, furnace, grinder, mill (via `unified_inventory`).

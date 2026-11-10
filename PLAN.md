@@ -236,6 +236,7 @@ Some machine combinations gain value: Technic's compressor turns 2 sand into 1 s
 - A loop member with a base price is held at that price. A loop with no base-priced member is priced from its routes that do not run round the loop. A member with no outside route stays unpriced (`report.dropped`).
 - Everything downstream keeps a sensible price. In the 51-mod world sand (1) and silver sand (1) are held although machines can make them for 0.5 and 0.25; `report.held` lists them.
 - Each cut is traced at log level info (`price loop: ...`).
+- **Decided: only warn the owner.** Items held inside a gaining loop keep their price, and the server log gets one warning at startup that says players with these mods can make them for less than the shop pays, followed by one line per item (for example sand: priced 1.00, machines make it for 0.50). The owner can then remove a recipe or a mod, or set a lower price in a price file.
 
 A property test checks that after generation no recipe makes an item for less than its price, except for fixed prices and items held in a loop.
 
