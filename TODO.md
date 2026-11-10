@@ -4,10 +4,12 @@ Decisions go in `PLAN.md` once answered.
 
 ## Open questions
 
-- [ ] When several currencies are installed, should a server setting pick one, or should the player choose? (Suggested: setting with auto-detection as the default.)
-- [ ] Base prices: use a Lua/JSON file of hand-set prices for raw items, seeded from the installed mods' ores?
-- [ ] Sell price: a fixed fraction of the buy price (for example 50%) set in `settingtypes.txt`?
-- [ ] How should prices finer than 5 cents be handled for `currency` (round to nearest 5)?
+All answered; see `PLAN.md`.
+
+- [x] When several currencies are installed, should a server setting pick one, or should the player choose? (Suggested: setting with auto-detection as the default.)
+- [x] Base prices: use a Lua/JSON file of hand-set prices for raw items, seeded from the installed mods' ores?
+- [x] Sell price: a fixed fraction of the buy price (for example 50%) set in `settingtypes.txt`?
+- [x] How should prices finer than 5 cents be handled for `currency` (round to nearest 5)?
 
 ## Tasks
 

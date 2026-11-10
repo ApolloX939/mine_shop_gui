@@ -33,6 +33,13 @@ All three are optional dependencies, reached through one adapter interface.
 - Giving physical change: V1.2.3 uses greedy 81/9/1 stacks. V1.3 uses one stack with `value` set and `description` set to `"Credit\nValue: N"`.
 - Check inventory room before adding or removing physical credits.
 
+## Decisions on pricing and currency choice
+
+- **Currency choice:** a server setting in `settingtypes.txt` picks the currency. Default is `auto`, which uses the first supported currency detected. All players use the same currency.
+- **Base prices:** a hand-edited Lua/JSON file maps item -> price. It is seeded from the ores in the installed mods and tweaked by hand. Items with no entry and no derivable recipe get no price.
+- **Sell price:** buy price multiplied by a configurable fraction (default 50%), set in `settingtypes.txt`.
+- **Rounding (`currency`, smallest coin 5 cents):** keep exact prices internally and round only the final transaction total to the nearest 5 cents, so buying many cheap items stays fair.
+
 ## Testing notes
 
 - `credits_old/mod.conf` was renamed to `name = credits_old` to avoid a load-time name clash. It still registers `credits:` items and the `/credits` command, so it will probably fail to load and conflicts with the new `credits`. Treat it as reference code. Test each credits version in its own world with only that version present.
