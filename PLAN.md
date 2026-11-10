@@ -176,6 +176,17 @@ Anchors for items that only come from uncrafting slabs and stairs: cobbles and p
 
 Result in the 51-mod world: all 198 craftable Everness items are priced, 1816 items overall, no unknown names, no unstable loops. With Technic installed, pyrite ingots cost half a lump (10) because of grinding, like the other metals.
 
+### Price inference (findings, not yet built)
+
+Idea: instead of listing every raw item in a price file, infer a default price from what the game already knows about the item, and keep price files only as overrides. Tested offline on the 51-mod world against the 492 hand-set prices (the hand-set values are my own category choices, so agreement shows the categories compress well, not that the values are right):
+
+- **Item-property rules** (groups such as `tree`, `sapling`, `leaves`, `soil`/`sand`, plants/flowers, food, stone-like nodes with no recipe): fire on 84% of the hand-set items. 253 (51%) match the hand-set price exactly, 324 (66%) are within a factor of 2. Per rule: leaves 38 of 38 exact, saplings 33 of 33, trees 29 of 30, soils 46 of 52. Weak: stone-like (11 of 74 exact) and food (9 of 35), because special cases hide inside them.
+- **What the rules cannot see:** rare materials and design intent (diamond, mese, gold, etherium, obsidian, golden apple), crystals and lanterns (light), deep-sea corals, fish tiers, and everything with no group at all (cobbles, clay, ice, snow, flint).
+- **Worldgen rarity for ores:** fitted on the 7 Minetest Game ores, `price = 2.09 * density^-0.74` (R2 = 0.68), where density is the sum of `clust_num_ores / clust_scarcity` over the ore's definitions. On ores not used in the fit it lands within a factor of 2 for lead (13.7 vs 14), zinc (17.6 vs 14), etherium (42 vs 40), uranium (46 vs 60) and chromium (31 vs 60), and misses quartz (55 vs 20) and pyrite (60 vs 20). It priced Techage's baborium lump (never hand-priced) at about 39. The density ignores depth and treats bulk or decorative spawns badly (ceramic sherds come out at 224, sand at its own tiny density), so it only suits lumps and crystals.
+- **Limits:** inference cannot price machine-made parts with no recipe (Techage chips, vacuum tubes), fishing or mob drops, or anything that is a design choice. It is only as good as the few hand-set anchors it is calibrated on.
+- **Proposed layering** (lowest priority first): inferred defaults, then `prices/` files as overrides, then the price hook. Each inferred entry keeps `source = "inferred:<rule>"` so it can be seen and filtered. Recipe derivation still runs on top of all of it.
+- **Expected effect:** deleting entries whose rule gives the same number would remove about 250 of the 492 lines with no price change. Refining a few rules (light, crystal and coral names, fish) could bring the overrides down to roughly 100.
+
 ### Result on the 51-mod test world
 
 2707 recipes read (2474 crafting, 104 smelting, 83 grinding, 17 compressing, 14 alloy, 14 extracting, 1 freezing). 410 items priced, no unstable loops. 1480 craftable items are still unpriced because something they need has no price: mostly stairs (464), Techage (263), Everness (197), Technic machines (182), Ethereal (158). Natural default items that need anchors are clay lump, cactus, papyrus, ice, snow, obsidian and the farming crops (wheat, cotton, string).

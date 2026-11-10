@@ -13,6 +13,8 @@ All answered; see `PLAN.md`.
 
 ## Tasks
 
+- [ ] Decide whether to build price inference (see `PLAN.md`, "Price inference"): rules by item properties, an ore-rarity estimate, and price files demoted to overrides.
+
 - [x] Pricing derivation core (`src/pricing/derive.lua`) with tests.
 - [x] Recipe collector, flags (`no_buy` / `no_sell`), markup settings and the whole-table price hook. See `PLAN.md`.
 - [x] Base price file format (Lua) and loader, with tests.
