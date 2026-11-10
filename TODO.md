@@ -24,8 +24,10 @@ All answered; see `PLAN.md`.
 - [x] Everness prices (`prices/mods/everness.lua`), drafted by Claude: review the values.
 - [x] Techage prices (`prices/mods/techage.lua`), drafted by Claude: review the values. Tiers climb about 3 to 4 times each.
 - [ ] Decide prices for other content mods that still have unpriced raw items (the leftover `default` items such as bush stems, 3d_armor, pipeworks, hyperloop, signs_bot, currency).
+- [ ] **Decision needed:** base prices that recipes undercut (28 in the 51-mod world, 11 of them real sell-back gaps: obsidian, basalt glass, clay lump, aluminium and others). See `PLAN.md`, "Base prices above recipe cost". Options: fix by hand, make base a ceiling (recommended), or leave it.
 - [ ] Price `techage:bauxite_stone` and its slabs, if you want them traded. Techage chips and aluminium block the most recipes; the empty bucket needs `techage:iron_ingot`.
 - [x] Price `techage:iron_ingot` at 16: this unlocked the empty and water buckets and the Ethereal crystal chain.
+- [x] Techage machine recipes: fabricators, doser (own API) and melting pot, furnace, grinder, mill (via `unified_inventory`).
 - [ ] Torches come out at 0.56 each because the cheapest member of group `charcoal` (priced 2) beats coal (8). Decide if group pricing needs a rule (for example ignore groups wider than N members).
 - [ ] Add price files for the other games (`mineclonia`, `mineclone2`) when you want to support them.
 - [x] Run the derivation on the real recipes (51-mod world): 410 priced, no unstable loops.

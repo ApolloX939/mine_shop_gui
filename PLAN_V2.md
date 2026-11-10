@@ -91,7 +91,7 @@ Only for items dropped by ore nodes and classed as a lump or crystal. It uses th
 
 - **Drops:** an ore node costs what its drop costs. A leaf node that drops a sapling gets a share of that sapling's price.
 - **Loop anchors:** items that are only made by uncrafting slabs, stairs or blocks (the "cobble anchors" written by hand in version 1) can take the price of the nearest known stone-like item.
-- **Reading Techage's own machine recipes.** Techage has its own recipe system for its grinder, furnace and similar machines, which the collector does not read (the way it reads Technic's). Before this is built, check the real API. If it is usable, powders and ingots like `techage:iron_ingot` could be derived instead of hand-set. This was noticed, not verified.
+- **Techage's machine recipes** are now read in version 1 (fabricators and doser through Techage's API, the furnace, melting pot, grinder and mill through `unified_inventory` when it is installed). What is left for later: a way to read the craft-guide types without `unified_inventory` (for example a small request to Techage for a public listing), and Techage's random sieve and rinser outputs.
 
 ### Safety
 

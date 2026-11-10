@@ -205,6 +205,36 @@ Result in the 51-mod world: 431 of 437 craftable items in the Techage modpack ar
 
 Techage has its own machine recipe system (grinder, furnace and similar), which the collector does not read. See `PLAN_V2.md`.
 
+### Techage machine recipes (implemented)
+
+Techage keeps its recipes in several private places, so the collector reads two sources (`src/pricing/collect.lua`):
+
+- **Through Techage's own API, no extra mod needed:** the electronic fabricators (`ta2_`, `ta3_`, `ta4_electronic_fab`) and the chemical doser (`ta4_doser`), read one recipe at a time with `techage.recipes.get({recipe_idx = i}, rtype)`. The type names are the ones Techage registers; a recipe that appears under several tiers is kept once. Waste products (empty spools, red mud) count as free by-products and catalysts are not consumed, so neither adds to the cost. Recipes that need an ingredient that is not a registered item (for example some fluids) are skipped.
+- **Through `unified_inventory`'s craft guide, only when that mod is installed:** the iron-age melting pot (`melting`), the TA3 furnace (`ta3_melting`), the grinder (`grinding`) and the mill (`milling`). Techage hands those to the craft guide but keeps them private otherwise. Sieves and the rinser are not read, because their output is random. This relies on `unified_inventory.crafts_for.recipe`, which is not a documented interface, so it is best effort.
+- Markup settings exist for the new types (`ta2_electronic_fab`, `ta3_electronic_fab`, `ta4_electronic_fab`, `ta4_doser`, `melting`, `ta3_melting`, `milling`).
+- Result in the 51-mod world: 2896 recipes collected; fabricators 1 + 2 + 5, doser 18, melting 4, TA3 furnace 105, grinding 139.
+- **Hand-set Techage prices changed accordingly.** Vacuum tube, WLAN and RAM chips, LEDs, both AI chips and the SSD are no longer listed: they are priced from their parts. The vacuum tube comes out at 37 (not my earlier guess of 12) because each pair needs a usmium nugget; chips and LEDs come out much cheaper than my tier guesses (WLAN chip 16, LED 3). Items that depend on the craft guide keep a hand price, now aligned with what the recipes give (silicon wafer 3, carbon fiber 5, magnet shield 38, graphite powder 8, clay and cement powder 1), so servers without `unified_inventory` still price them. A markup on `ta4_electronic_fab` and the others is the way to make later tiers dearer.
+
+### Base prices above recipe cost (finding, decision pending)
+
+A base price is never lowered by a recipe, so a recipe can make an item for less than its base price. The generator now reports these (`report.below_base`, and one log line at startup). In the 51-mod world there are 28. Eleven are real sell-back gaps (buying the ingredients, crafting and selling back at the 50% sell ratio would make money):
+
+| Item | Base | Cheapest recipe | Machine |
+|---|---|---|---|
+| obsidian | 25 | 1 | melting pot turns cobblestone into obsidian |
+| basalt glass thin, thin 2 | 6 | 0.5 | TA3 furnace |
+| basalt glass thin XL, XL 2 | 10 | 1 | TA3 furnace |
+| clay lump | 2 | 0.25 | Techage's grinder turns sand into clay |
+| TA5 fusion reactor shell | 200 | 45 | TA3 furnace |
+| silver sand | 1 | 0.25 | grinder |
+| snow | 1 | 0.33 | crafting |
+| aluminium | 24 | 8 | TA3 furnace |
+| bauxite gravel | 3 | 1 | grinder |
+
+The other 17 are within a factor of 2 (no profit at a 50% sell ratio) or close to it.
+
+Options to close the gaps: (A) keep base prices fixed and lower the specific base prices by hand, in `techage.lua` so it only happens when Techage is installed (as for Technic's ingots); (B) make a base price a ceiling, so an item costs the lower of its base price and its cheapest recipe, which is automatic and matches the Technic ingot rule; (C) leave it and rely on the report. Recommended: B, with a way to mark a base price as fixed for true anchors.
+
 ### Result on the 51-mod test world
 
 2707 recipes read (2474 crafting, 104 smelting, 83 grinding, 17 compressing, 14 alloy, 14 extracting, 1 freezing). 410 items priced, no unstable loops. 1480 craftable items are still unpriced because something they need has no price: mostly stairs (464), Techage (263), Everness (197), Technic machines (182), Ethereal (158). Natural default items that need anchors are clay lump, cactus, papyrus, ice, snow, obsidian and the farming crops (wheat, cotton, string).
