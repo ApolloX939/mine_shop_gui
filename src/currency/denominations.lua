@@ -5,6 +5,7 @@
 --   name = "adapter name",
 --   get_denominations = function() return { {name = "mod:item", value = 5}, ... } end,
 --   format = function(amount) return "..." end,    -- optional
+--   default_scale = 5,                             -- currency amount per price unit
 --   warn_missing = true,                           -- optional: log denominations whose item is not registered
 -- }
 --
@@ -103,6 +104,12 @@ function M.new(def)
 
 	function self.available()
 		return #resolved().list > 0
+	end
+
+	self.default_scale = def.default_scale
+
+	function self.unit()
+		return resolved().unit
 	end
 
 	function self.round(amount)

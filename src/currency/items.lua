@@ -21,6 +21,7 @@ end
 
 local adapter = mine_shop_gui.currency_denominations.new({
 	name = "items",
+	default_scale = 0.05, -- about 20 cobblestones per item
 	warn_missing = true,
 	get_denominations = function()
 		return parse(core.settings:get("mine_shop_gui_item_currency"))

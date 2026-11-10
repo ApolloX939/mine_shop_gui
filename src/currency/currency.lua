@@ -3,6 +3,7 @@
 
 local adapter = mine_shop_gui.currency_denominations.new({
 	name = "currency",
+	default_scale = 5, -- a cobblestone costs the smallest coin, 5 cents
 	get_denominations = function()
 		return {
 			-- coins

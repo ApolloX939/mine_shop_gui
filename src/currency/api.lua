@@ -14,6 +14,9 @@
 --   withdraw(player, amt)   take amt from the player; returns true, or false + reason
 --   deposit(player, amt)    give amt to the player; returns true, or false + reason
 --   format(amount)          human readable string
+--   unit()                  smallest amount the adapter can pay (a whole number)
+--   default_scale           currency amount per price unit; overridden by the
+--                           `mine_shop_gui_scale_<name>` setting
 --
 -- Failure reasons: "invalid_amount", "insufficient_funds", "no_room", "unavailable".
 -- withdraw and deposit are atomic: on failure nothing has changed.
@@ -97,6 +100,42 @@ end
 function api.deposit(player, amount)
 	if not api.active then return false, "unavailable" end
 	return api.active.deposit(player, amount)
+end
+
+-- Currency amount that one price unit is worth (1 unit = one cobblestone).
+function api.scale()
+	local adapter = api.active
+	if not adapter then return 1 end
+	local value = tonumber(core.settings:get("mine_shop_gui_scale_" .. adapter.name))
+	if value and value > 0 then return value end
+	return adapter.default_scale or 1
+end
+
+local function sell_ratio()
+	local value = tonumber(core.settings:get("mine_shop_gui_sell_ratio")) or 0.5
+	return math.min(1, math.max(0, value))
+end
+
+-- Convert a total in price units (the buy price, already multiplied by the
+-- quantity) into an amount of the active currency the player can pay.
+--   mode "buy":  never free unless the price is 0; at least the smallest unit.
+--   mode "sell": the buy price times the sell ratio; refused ("too_cheap")
+--                if that is less than the smallest unit.
+function api.price(units, mode)
+	local adapter = api.active
+	if not adapter then return nil, "unavailable" end
+	if mode ~= "buy" and mode ~= "sell" then return nil, "invalid_mode" end
+	if type(units) ~= "number" or units ~= units or units < 0 or units == math.huge then
+		return nil, "invalid_amount"
+	end
+	if mode == "buy" and units == 0 then return 0 end
+
+	if mode == "sell" then units = units * sell_ratio() end
+	local unit = adapter.unit()
+	local amount = adapter.round(units * api.scale())
+	if mode == "buy" then return math.max(amount, unit) end
+	if amount < unit then return nil, "too_cheap" end
+	return amount
 end
 
 function api.format(amount)

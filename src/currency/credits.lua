@@ -52,6 +52,12 @@ local function get_inventory(player)
 	return obj and obj:get_inventory()
 end
 
+adapter.default_scale = 1
+
+function adapter.unit()
+	return 1
+end
+
 function adapter.round(amount)
 	return math.floor(amount + 0.5)
 end

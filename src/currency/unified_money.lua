@@ -15,6 +15,12 @@ function adapter.available()
 		and type(u.add_balance_safe) == "function"
 end
 
+adapter.default_scale = 1
+
+function adapter.unit()
+	return 1
+end
+
 function adapter.round(amount)
 	return amount
 end
