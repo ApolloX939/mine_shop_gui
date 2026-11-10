@@ -17,6 +17,11 @@ load("src/currency/unified_money")
 load("src/currency/credits")
 load("src/currency/items")
 
+-- Pricing: derives item prices from base prices and recipes.
+mine_shop_gui.pricing = {
+	derive = dofile(mine_shop_gui.modpath .. "/src/pricing/derive.lua"),
+}
+
 -- Integration tests, only when the mtt test framework is enabled.
 if core.get_modpath("mtt") and mtt and mtt.enabled then
 	load("mtt")

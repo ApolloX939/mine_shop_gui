@@ -333,3 +333,117 @@ mtt.register("price: credits and items use their own scales", function(callback)
 	assert(api.price(7, "buy") == 7)
 	callback()
 end)
+
+---------------------------------------------------------------- price derivation
+
+local derive = mine_shop_gui.pricing.derive
+
+-- recipe(type, {{"item", count}, {group = "g", count}}, "output", output_count)
+local function recipe(rtype, inputs, out_name, out_count)
+	local list = {}
+	for _, i in ipairs(inputs) do
+		if i.group then
+			list[#list + 1] = { group = i.group, count = i.count or 1 }
+		else
+			list[#list + 1] = { name = i[1], count = i[2] or 1 }
+		end
+	end
+	return { type = rtype, inputs = list, output = { name = out_name, count = out_count or 1 } }
+end
+
+local function near(a, b) return a ~= nil and math.abs(a - b) < 1e-9 end
+
+mtt.register("derive: cost is the sum of ingredients divided by output count", function(callback)
+	local prices, source = derive({
+		base = { ["t:stone"] = 1, ["t:log"] = 4 },
+		recipes = {
+			recipe("normal", { { "t:stone", 3 } }, "t:wall"),
+			recipe("normal", { { "t:log" } }, "t:plank", 4),
+		},
+	})
+	assert(near(prices["t:wall"], 3))
+	assert(near(prices["t:plank"], 1))
+	assert(source["t:wall"] == "normal" and source["t:stone"] == "base")
+	callback()
+end)
+
+mtt.register("derive: cheapest route wins", function(callback)
+	local prices = derive({
+		base = { ["t:a"] = 10, ["t:b"] = 3 },
+		recipes = {
+			recipe("normal", { { "t:a" } }, "t:x"),
+			recipe("alloy", { { "t:b", 2 } }, "t:x"),
+		},
+	})
+	assert(near(prices["t:x"], 6))
+	callback()
+end)
+
+mtt.register("derive: base prices are never overridden", function(callback)
+	local prices, source = derive({
+		base = { ["t:a"] = 10, ["t:x"] = 100 },
+		recipes = { recipe("normal", { { "t:a" } }, "t:x") },
+	})
+	assert(near(prices["t:x"], 100) and source["t:x"] == "base")
+	callback()
+end)
+
+mtt.register("derive: recipes with an unpriced ingredient give no price", function(callback)
+	local prices = derive({
+		base = { ["t:a"] = 1 },
+		recipes = {
+			recipe("normal", { { "t:a" }, { "t:mystery" } }, "t:x"),
+			recipe("normal", { { "t:x" } }, "t:y"),
+		},
+	})
+	assert(prices["t:x"] == nil and prices["t:y"] == nil)
+	callback()
+end)
+
+mtt.register("derive: markup per recipe type", function(callback)
+	local prices = derive({
+		base = { ["t:a"] = 10 },
+		recipes = { recipe("alloy", { { "t:a", 2 } }, "t:x") },
+		markup = function(rtype) return rtype == "alloy" and 0.25 or 0 end,
+	})
+	assert(near(prices["t:x"], 25))
+	callback()
+end)
+
+mtt.register("derive: a group costs as much as its cheapest priced member", function(callback)
+	local prices = derive({
+		base = { ["t:oak"] = 4, ["t:pine"] = 2 },
+		groups = { wood = { "t:oak", "t:pine", "t:unpriced" } },
+		recipes = { recipe("normal", { { group = "wood", count = 2 } }, "t:chest") },
+	})
+	assert(near(prices["t:chest"], 4))
+	callback()
+end)
+
+mtt.register("derive: block and ingot cycle settles at the cheapest cost", function(callback)
+	local prices = derive({
+		base = { ["t:ingot"] = 10 },
+		recipes = {
+			recipe("normal", { { "t:ingot", 9 } }, "t:block"),
+			recipe("normal", { { "t:block" } }, "t:ingot", 9),
+		},
+	})
+	assert(near(prices["t:ingot"], 10), "ingot stays at its base price")
+	assert(near(prices["t:block"], 90))
+	callback()
+end)
+
+mtt.register("derive: a loop that creates value is dropped, not priced near zero", function(callback)
+	local prices, _, dropped = derive({
+		base = { ["t:seed"] = 8 },
+		recipes = {
+			recipe("normal", { { "t:seed" } }, "t:clone"),
+			recipe("normal", { { "t:clone" } }, "t:clone", 2), -- duplicates itself
+			recipe("normal", { { "t:seed" } }, "t:fine"),
+		},
+	})
+	assert(prices["t:clone"] == nil, "clone has no price")
+	assert(near(prices["t:fine"], 8), "unrelated items keep their price")
+	assert(#dropped == 1 and dropped[1] == "t:clone")
+	callback()
+end)
