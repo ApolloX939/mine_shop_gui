@@ -447,3 +447,73 @@ mtt.register("derive: a loop that creates value is dropped, not priced near zero
 	assert(#dropped == 1 and dropped[1] == "t:clone")
 	callback()
 end)
+
+---------------------------------------------------------------- base price file
+
+local base_prices = mine_shop_gui.pricing.base_prices
+
+local function write_temp(name, text)
+	local path = core.get_worldpath() .. "/mine_shop_gui_test_" .. name .. ".lua"
+	assert(core.safe_file_write(path, text))
+	return path
+end
+
+mtt.register("base prices: a Lua file with comments and decimals loads", function(callback)
+	local path = write_temp("ok", [[
+-- stone family
+return {
+	["default:stone"] = 1, -- cheap
+	["default:gold_lump"] = 40.5,
+}
+]])
+	local prices, problems = base_prices.parse(path)
+	assert(prices, tostring(problems))
+	assert(prices["default:stone"] == 1 and prices["default:gold_lump"] == 40.5)
+	assert(#problems == 0)
+	callback()
+end)
+
+mtt.register("base prices: invalid entries are reported and skipped", function(callback)
+	local path = write_temp("bad", [[
+return {
+	["default:stone"] = 1,
+	["default:dirt"] = -3,
+	["default:sand"] = "lots",
+	[5] = 2,
+}
+]])
+	local prices, problems = base_prices.parse(path)
+	assert(prices["default:stone"] == 1)
+	assert(prices["default:dirt"] == nil and prices["default:sand"] == nil)
+	assert(#problems == 3, "problems: " .. #problems)
+	callback()
+end)
+
+mtt.register("base prices: files cannot run code or touch globals", function(callback)
+	local path = write_temp("evil", [[
+core.log("error", "price file ran code")
+return { ["default:stone"] = 1 }
+]])
+	local prices, err = base_prices.parse(path)
+	assert(prices == nil and err, "expected the file to be rejected")
+	callback()
+end)
+
+mtt.register("base prices: syntax errors and wrong return types are rejected", function(callback)
+	local prices, err = base_prices.parse(write_temp("syntax", "return {"))
+	assert(prices == nil and err)
+	prices, err = base_prices.parse(write_temp("number", "return 5"))
+	assert(prices == nil and err:find("table"))
+	prices, err = base_prices.parse(core.get_worldpath() .. "/mine_shop_gui_test_missing.lua")
+	assert(prices == nil and err == "not found")
+	callback()
+end)
+
+mtt.register("base prices: world file overrides, false removes", function(callback)
+	local merged = base_prices.merge(
+		{ ["a:x"] = 1, ["a:y"] = 2, ["a:z"] = 3 },
+		{ ["a:y"] = 20, ["a:z"] = false, ["a:new"] = 5 })
+	assert(merged["a:x"] == 1 and merged["a:y"] == 20 and merged["a:new"] == 5)
+	assert(merged["a:z"] == nil)
+	callback()
+end)
