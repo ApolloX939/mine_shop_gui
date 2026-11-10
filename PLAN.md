@@ -263,7 +263,7 @@ Decisions (chosen with the owner): open with the `/shop` command first (a placea
 
 Three screens, in `src/shop/`:
 - **Categories** (`ui.lua`, `catalog.lua`): one per mod with at least 4 tradable items, the rest under "Other", plus "Everything"; 15 per page; the picture is the dearest item of the mod; search box.
-- **Items**: 6 by 4 grid of item pictures, the buy price under each, a tooltip with name, buy and sell price (or "only N or more at once" when one item is worth less than a coin). Sorted by title; search words must all match the title or the technical name. Hidden variants and items that cannot be traded in either direction are left out.
+- **Items**: 6 by 3 grid of item pictures with the item name (shortened to 16 characters) and the buy price under each, a tooltip with name, buy and sell price (or "only N or more at once" when one item is worth less than a coin). Sorted by title; search words must all match the title or the technical name. Hidden variants and items that cannot be traded in either direction are left out.
 - **Trade**: amount controls, total to buy, payout, held count, BUY, SELL and SELL ALL. Buttons that do not apply are not drawn.
 
 Safety and correctness:
@@ -274,7 +274,7 @@ Safety and correctness:
 
 Tested in the real engine: buying with change, not enough money, undeliverable purchase paid back (for `currency`, `credits` and `unified_money`), selling with flagged and worn stacks, sell all, flags and limits, the catalog (categories, search, paging, regeneration), the whole window flow including forged fields, and a `formspec_ast` syntax check of every screen (the parser must accept all elements that were written).
 
-Not yet checked: how the window looks in a real client. The tests prove the syntax and the behavior, not the appearance.
+First look in a real client (screenshots from the owner) showed three problems, now fixed: category pictures stretched over the whole button and hid the title (now a small picture button with a separate title button), the item grid showed no names (now a name under each picture, with fewer rows to make room), and text fields came out bright green (now a dark box with the field's own border turned off). Category names without a `mod.conf` title are capitalised, and "Everything" uses a chest picture. The trade screen needed no change. The tests prove the syntax and the behavior; the appearance still needs the owner's eye.
 
 ### Result on the 51-mod test world
 

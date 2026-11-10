@@ -1477,6 +1477,7 @@ mtt.register("shop window: navigation and forged fields", function(callback)
 			click("shop_win3", { cat_9999 = "" })
 			click("shop_win3", { cat_0 = "" })
 			click("shop_win3", { ["cat_1; evil"] = "" })
+			click("shop_win3", { ["cat_1_t_x"] = "" })
 			assert(state.screen == "categories", "positions that do not exist are ignored")
 			click("shop_win3", { buy = "BUY", sell = "x", sellall = "x" })
 			assert(not has_stack(inv, "default:cobble") and count_value(inv, CENTS) == 100,
@@ -1576,7 +1577,7 @@ if core.get_modpath("formspec_ast") then
 -- Every element the window builder writes must survive parsing: the parser
 -- drops anything malformed, so the counts per element type must agree.
 local ELEMENTS = { "label", "button", "item_image_button", "item_image", "field", "tooltip",
-	"field_close_on_enter" }
+	"field_close_on_enter", "box", "style" }
 
 local function written(spec)
 	local counts = {}

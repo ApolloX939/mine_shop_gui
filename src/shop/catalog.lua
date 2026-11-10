@@ -28,7 +28,9 @@ local function mod_title(mod)
 		local title = Settings(path .. "/mod.conf"):get("title")
 		if title and title ~= "" then return plain(title) end
 	end
-	return mod
+	-- no title: "stairs" -> "Stairs", "everness_extras" -> "Everness extras"
+	local words = mod:gsub("_", " ")
+	return words:sub(1, 1):upper() .. words:sub(2)
 end
 
 local function build()
@@ -80,7 +82,12 @@ local function build()
 	for _, record in ipairs(list) do
 		if not dearest or record.price > dearest.price then dearest = record end
 	end
-	if dearest then categories[1].icon = dearest.name end
+	-- a chest stands for "Everything" when there is one, so it differs from the mod pictures
+	if core.registered_items["default:chest"] and P.items["default:chest"] then
+		categories[1].icon = "default:chest"
+	elseif dearest then
+		categories[1].icon = dearest.name
+	end
 
 	return { generation = P.generation, list = list, members = members, categories = categories }
 end

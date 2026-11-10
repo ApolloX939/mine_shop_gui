@@ -14,7 +14,7 @@ local esc = core.formspec_escape
 
 local FORM = "mine_shop_gui:shop"
 local CATEGORY_COLUMNS, CATEGORY_ROWS = 3, 5
-local ITEM_COLUMNS, ITEM_ROWS = 6, 4
+local ITEM_COLUMNS, ITEM_ROWS = 6, 3
 local PER_PAGE = ITEM_COLUMNS * ITEM_ROWS
 
 local ui = {}
@@ -39,6 +39,25 @@ local function money(amount)
 	return api.format(amount)
 end
 
+-- Cut text to `limit` characters (not bytes, so accents survive), ending in "..".
+local function shorten(text, limit)
+	local characters = {}
+	for character in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+		characters[#characters + 1] = character
+	end
+	if #characters <= limit then return text end
+	return table.concat(characters, "", 1, limit - 2) .. ".."
+end
+
+-- A text field on a dark box: the default field is bright green in some themes.
+local function input_field(x, y, width, height, name, value)
+	return table.concat({
+		string.format("box[%g,%g;%g,%g;#1c1c1c]", x, y, width, height),
+		string.format("style[%s;border=false;textcolor=#ffffff]", name),
+		string.format("field[%g,%g;%g,%g;%s;;%s]", x, y, width, height, name, esc(value)),
+	})
+end
+
 ---------------------------------------------------------------- pieces
 
 local function header(name, title)
@@ -61,7 +80,7 @@ end
 
 local function search_bar(state, x, width)
 	return table.concat({
-		string.format("field[%g,1.2;%g,0.8;query;;%s]", x, width, esc(state.query)),
+		input_field(x, 1.2, width, 0.8, "query", state.query),
 		"field_close_on_enter[query;false]",
 		string.format("button[%g,1.2;2.2,0.8;do_search;%s]", x + width + 0.2, esc(S("Search"))),
 	})
@@ -93,8 +112,10 @@ local function categories_screen(name, state)
 	for i, category in ipairs(slice) do
 		state.page_categories[i] = category.id
 		local column, row = (i - 1) % CATEGORY_COLUMNS, math.floor((i - 1) / CATEGORY_COLUMNS)
-		out[#out + 1] = string.format("item_image_button[%g,%g;4.5,1.3;%s;cat_%d;%s]",
-			0.5 + column * 4.7, 2.3 + row * 1.5, esc(category.icon), i,
+		local x, y = 0.5 + column * 4.7, 2.3 + row * 1.5
+		-- two buttons that both pick the category: the picture, and the title beside it
+		out[#out + 1] = string.format("item_image_button[%g,%g;1.3,1.3;%s;cat_%d;]", x, y, esc(category.icon), i)
+		out[#out + 1] = string.format("button[%g,%g;3.2,1.3;cat_%d_t;%s]", x + 1.3, y, i,
 			esc(category.title .. " (" .. category.count .. ")"))
 	end
 	out[#out + 1] = paging(page, pages)
@@ -118,11 +139,12 @@ local function items_screen(name, state)
 	for i, record in ipairs(slice) do
 		state.page_items[i] = record
 		local column, row = (i - 1) % ITEM_COLUMNS, math.floor((i - 1) / ITEM_COLUMNS)
-		local x, y = 0.5 + column * 2.3, 2.3 + row * 1.95
+		local x, y = 0.5 + column * 2.3, 2.3 + row * 2.5
 		local buy = trade.quote(record.name, 1, "buy")
 		out[#out + 1] = string.format("item_image_button[%g,%g;1.5,1.5;%s;item_%d;]", x + 0.4, y, esc(record.name), i)
 		out[#out + 1] = string.format("tooltip[item_%d;%s]", i, esc(tooltip_for(record)))
-		out[#out + 1] = string.format("label[%g,%g;%s]", x + 0.35, y + 1.75, esc(buy and money(buy) or "-"))
+		out[#out + 1] = string.format("label[%g,%g;%s]", x + 0.1, y + 1.85, esc(shorten(record.title, 16)))
+		out[#out + 1] = string.format("label[%g,%g;%s]", x + 0.1, y + 2.3, esc(buy and money(buy) or "-"))
 	end
 	out[#out + 1] = paging(page, pages)
 	return table.concat(out)
@@ -157,7 +179,7 @@ local function trade_screen(name, state)
 	for _, step in ipairs(steps) do
 		out[#out + 1] = string.format("button[%g,5.2;1.4,0.9;%s;%s]", step[3], step[1], step[2])
 	end
-	out[#out + 1] = string.format("field[5.6,5.2;2.8,0.9;amount;;%d]", amount)
+	out[#out + 1] = input_field(5.6, 5.2, 2.8, 0.9, "amount", tostring(amount))
 	out[#out + 1] = "field_close_on_enter[amount;false]"
 
 	-- totals and actions
@@ -272,7 +294,7 @@ function ui.handle(name, state, fields)
 		end
 	else
 		for key in pairs(fields) do
-			local index = tonumber(key:match("^cat_(%d+)$") or "")
+			local index = tonumber(key:match("^cat_(%d+)$") or key:match("^cat_(%d+)_t$") or "")
 			local id = index and state.page_categories and state.page_categories[index]
 			if id then
 				state.screen, state.category, state.page = "items", id, 1
