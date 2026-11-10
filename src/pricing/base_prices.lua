@@ -1,13 +1,16 @@
--- Loads the base price list: a Lua file that returns a table of
--- ["mod:item"] = price units.
+-- Loads the base price list. Every file is a Lua table of
+-- ["mod:item"] = price units, run in an empty environment so it can only hold data.
 --
--- Two files are read and merged:
---   <mod>/base_prices.lua                       ships with the mod
---   <world>/mine_shop_gui_prices.lua            optional, edited by the server owner
--- Entries in the world file replace those in the mod file. Setting an item to
--- `false` in the world file removes its price.
+-- Files, merged in this order (later entries replace earlier ones):
+--   prices/games/<game_id>.lua      for the running game (for example minetest, mineclonia)
+--   prices/mods/<mod_id>.lua        for every enabled mod, in alphabetical order
+--   <world>/mine_shop_gui_prices.lua   optional, edited by the server owner
+-- Setting an item to `false` removes its price from everything loaded before it.
 --
--- Files run in an empty environment, so they can only hold data.
+-- <mod_id> is the `name` in the mod's mod.conf (preferred). A file named after
+-- the mod's folder is still found when the names differ, but that is the old
+-- style and is deprecated. Prices for a game or mod that is not installed are
+-- never read.
 
 local M = {}
 
@@ -16,7 +19,7 @@ local function describe(value)
 end
 
 -- Read one file. Returns prices (table), problems (list of strings).
--- A missing file returns nil, "not found". An unreadable one returns nil, message.
+-- A missing file returns nil, "not found". An unusable one returns nil, message.
 function M.parse(path)
 	local file = io.open(path, "rb")
 	if not file then return nil, "not found" end
@@ -60,14 +63,34 @@ function M.merge(base, override)
 	return merged
 end
 
+local function exists(path)
+	local file = io.open(path, "rb")
+	if file then file:close() return true end
+	return false
+end
+
+-- Find the price file of a mod inside `dir` (the prices/mods folder).
+-- `modname` is the name the engine uses (mod.conf name, else folder name) and
+-- `modpath` the mod's folder. Returns the file path and whether it was found
+-- through the deprecated folder-name style, or nil if there is none.
+function M.mod_file(dir, modname, modpath)
+	local preferred = dir .. "/" .. modname .. ".lua"
+	if exists(preferred) then return preferred, false end
+	local folder = modpath:match("([^/\\]+)[/\\]*$")
+	if folder and folder ~= modname then
+		local old = dir .. "/" .. folder .. ".lua"
+		if exists(old) then return old, true end
+	end
+	return nil
+end
+
 local function log(level, msg)
 	core.log(level, "[mine_shop_gui] " .. msg)
 end
 
-local function load_file(path, label, required)
+local function load_file(path, label)
 	local prices, problems = M.parse(path)
 	if not prices then
-		if problems == "not found" and not required then return nil end
 		log("warning", label .. " price file could not be used: " .. tostring(problems))
 		return nil
 	end
@@ -77,13 +100,53 @@ local function load_file(path, label, required)
 	return prices
 end
 
--- Load the mod's file and the world's file, merged.
-function M.load()
-	local mod_file = mine_shop_gui.modpath .. "/base_prices.lua"
-	local world_file = core.get_worldpath() .. "/mine_shop_gui_prices.lua"
-	local shipped = load_file(mod_file, "mod", true) or {}
-	local override = load_file(world_file, "world", false)
-	return M.merge(shipped, override)
+-- Load every price file that applies to this server.
+-- Returns the merged prices and a list of item names that are not registered
+-- (usually typos or items from a mod version that is not installed).
+-- Call after all mods have loaded.
+function M.load(opts)
+	opts = opts or {}
+	local root = opts.root or (mine_shop_gui.modpath .. "/prices")
+	local world_file = opts.world_file or (core.get_worldpath() .. "/mine_shop_gui_prices.lua")
+	local prices = {}
+
+	local game = opts.game_id
+	if game == nil and core.get_game_info then
+		game = (core.get_game_info() or {}).id
+	end
+	if game and game ~= "" then
+		local path = root .. "/games/" .. game .. ".lua"
+		if exists(path) then
+			prices = M.merge(prices, load_file(path, "game '" .. game .. "'") or {})
+		end
+	end
+
+	for _, modname in ipairs(opts.mods or core.get_modnames()) do
+		local path, deprecated = M.mod_file(root .. "/mods", modname, core.get_modpath(modname) or "")
+		if path then
+			if deprecated then
+				log("warning", "price file " .. path .. " is named after the mod's folder; "
+					.. "name it after the mod.conf name '" .. modname .. "' instead")
+			end
+			prices = M.merge(prices, load_file(path, "mod '" .. modname .. "'") or {})
+		end
+	end
+
+	if exists(world_file) then
+		prices = M.merge(prices, load_file(world_file, "world") or {})
+	end
+
+	local unknown = {}
+	for name in pairs(prices) do
+		if not core.registered_items[name] and not core.registered_aliases[name] then
+			unknown[#unknown + 1] = name
+		end
+	end
+	table.sort(unknown)
+	for _, name in ipairs(unknown) do
+		log("warning", "price file lists unknown item '" .. name .. "'")
+	end
+	return prices, unknown
 end
 
 return M

@@ -517,3 +517,63 @@ mtt.register("base prices: world file overrides, false removes", function(callba
 	assert(merged["a:z"] == nil)
 	callback()
 end)
+
+---------------------------------------------------------------- price file lookup
+
+-- A fixture tree under the world folder:
+--   prices/games/fakegame.lua, prices/mods/{alpha_conf,alpha_folder,onlyfolder,beta}.lua
+local fixture = core.get_worldpath() .. "/mine_shop_gui_test_fixture"
+local function fixture_file(rel, text)
+	local dir = (fixture .. "/" .. rel):match("^(.*)/[^/]+$")
+	assert(core.mkdir(dir), "cannot create " .. dir)
+	assert(core.safe_file_write(fixture .. "/" .. rel, text))
+end
+
+mtt.register("price files: mod.conf name is preferred, folder name is deprecated", function(callback)
+	local dir = fixture .. "/prices/mods"
+	fixture_file("prices/mods/alpha_conf.lua", "return {}")
+	fixture_file("prices/mods/alpha_folder.lua", "return {}")
+	fixture_file("prices/mods/onlyfolder.lua", "return {}")
+	fixture_file("prices/mods/beta.lua", "return {}")
+
+	local path, deprecated = base_prices.mod_file(dir, "alpha_conf", "/x/mods/alpha_folder")
+	assert(path == dir .. "/alpha_conf.lua" and deprecated == false, "conf name wins")
+
+	path, deprecated = base_prices.mod_file(dir, "gamma_conf", "/x/mods/onlyfolder/")
+	assert(path == dir .. "/onlyfolder.lua" and deprecated == true, "folder name is deprecated")
+
+	path, deprecated = base_prices.mod_file(dir, "beta", [[C:\x\mods\beta]])
+	assert(path == dir .. "/beta.lua" and deprecated == false, "no mod.conf name: folder is the id")
+
+	assert(base_prices.mod_file(dir, "nothing", "/x/mods/nothing") == nil)
+	callback()
+end)
+
+mtt.register("price files: game, mods and world file are layered in order", function(callback)
+	fixture_file("prices/games/fakegame.lua",
+		'return { ["fake:a"] = 1, ["fake:b"] = 2, ["fake:c"] = 3 }')
+	fixture_file("prices/mods/beta.lua", 'return { ["fake:b"] = 20, ["fake:d"] = 4 }')
+	fixture_file("world.lua", 'return { ["fake:c"] = false, ["fake:d"] = 40 }')
+
+	local prices, unknown = base_prices.load({
+		root = fixture .. "/prices",
+		game_id = "fakegame",
+		mods = { "beta", "not_installed_mod" },
+		world_file = fixture .. "/world.lua",
+	})
+	assert(prices["fake:a"] == 1, "game price kept")
+	assert(prices["fake:b"] == 20, "mod overrides game")
+	assert(prices["fake:c"] == nil, "world false removes")
+	assert(prices["fake:d"] == 40, "world overrides mod")
+	assert(#unknown == 3, "unknown items are reported: " .. #unknown)
+	callback()
+end)
+
+mtt.register("price files: the shipped files apply only to what is installed", function(callback)
+	local prices, unknown = base_prices.load()
+	assert(prices["default:cobble"] == 1, "game file for 'minetest' is loaded")
+	assert(prices["default:iron_lump"] == 16)
+	assert(prices["technic:zinc_lump"] == nil, "technic is not in this world")
+	assert(#unknown == 0, "shipped prices name unknown items: " .. table.concat(unknown, ", "))
+	callback()
+end)
