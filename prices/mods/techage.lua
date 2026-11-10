@@ -1,9 +1,13 @@
 -- Base prices for Techage, in price units. 1 unit = the value of one cobblestone.
 -- Items not listed are priced from their recipes, or have no price.
 --
--- Most Techage raw items are not found in the world: its machines make them
--- without a craft recipe, so these prices are judgment calls. They climb with
--- the tech tier, each tier costing roughly three to four times the one before.
+-- Techage's electronic fabricators and doser are read from Techage itself, so the
+-- chips, LEDs, vacuum tubes and SSDs are priced from their parts and are not listed
+-- here. Its furnace, melting pot, grinder and mill are only readable through
+-- unified_inventory, so the items they make keep a price here (the values match
+-- what those recipes give) and still work on servers without that mod. The rest
+-- are made by machines without any readable recipe: judgment calls, climbing
+-- with the tech tier.
 --
 -- Deliberately unpriced (not meant to be traded): admin and test blocks (item
 -- source, sink, test block, power sources, water stop), oil sources, ore nodes,
@@ -34,12 +38,12 @@ return {
 	-- TA1: powders and basics
 	["techage:charcoal"] = 2,
 	["techage:iron_powder"] = 16,
-	["techage:clay_powder"] = 2,
-	["techage:cement_powder"] = 2,
-	["techage:graphite_powder"] = 6,
+	["techage:clay_powder"] = 1,
+	["techage:cement_powder"] = 1,
+	["techage:graphite_powder"] = 8,
 	["techage:leave_powder"] = 1,
 	["techage:needle_powder"] = 1,
-	["techage:silver_sandstone_powder"] = 2,
+	["techage:silver_sandstone_powder"] = 1,
 
 	-- TA2/TA3: metals, glass and chemistry
 	["techage:aluminum"] = 24,
@@ -68,26 +72,19 @@ return {
 	["techage:cylinder_large_hydrogen"] = 40,
 	["techage:ta3_barrel_bitumen"] = 20,
 
-	-- TA3: electronics
-	["techage:vacuum_tube"] = 12,
+	-- TA3: electronics (the vacuum tube is priced from its recipe)
 	["techage:wlanchip"] = 30,
 	["techage:ta3_logic"] = 20,
 
-	-- TA4: chips and ceramics
-	["techage:ta4_wlanchip"] = 40,
-	["techage:ta4_ramchip"] = 40,
-	["techage:ta4_leds"] = 15,
-	["techage:ta4_silicon_wafer"] = 20,
-	["techage:ta4_carbon_fiber"] = 30,
+	-- TA4: silicon, carbon and ceramics (the chips and LEDs are priced from their recipes)
+	["techage:ta4_silicon_wafer"] = 3,
+	["techage:ta4_carbon_fiber"] = 5,
 	["techage:ta4_furnace_ceramic"] = 10,
 	["techage:ta4_round_ceramic"] = 10,
 
-	-- TA5: fusion age
-	["techage:ta5_aichip"] = 120,
-	["techage:ta5_aichip2"] = 250,
+	-- TA5: fusion age (the AI chips and SSD are priced from their recipes)
 	["techage:ta5_controlunit"] = 150,
-	["techage:ta5_ssd"] = 100,
 	["techage:ta5_ceramic_turbine"] = 120,
 	["techage:ta5_fr_shell"] = 200,
-	["techage:ta5_magnet_shield"] = 150,
+	["techage:ta5_magnet_shield"] = 38,
 }

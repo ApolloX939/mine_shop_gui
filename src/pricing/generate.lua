@@ -74,7 +74,7 @@ function P.generate(opts)
 	local groups = opts.groups or collect.groups(recipes)
 	local own_flags = opts.flags or collect.item_flags()
 
-	local prices, source, dropped, flags = P.derive({
+	local prices, source, dropped, flags, below = P.derive({
 		base = base,
 		recipes = recipes,
 		groups = groups,
@@ -96,6 +96,23 @@ function P.generate(opts)
 		log("warning", "no stable price for '" .. name .. "': its recipes create value in a loop")
 	end
 
+	-- Base prices that a recipe can undercut: the base price still applies, but
+	-- buying the ingredients, crafting and selling back may pay off.
+	local below_base = {}
+	for name, route in pairs(below) do
+		below_base[#below_base + 1] = { item = name, base = prices[name], route = route }
+	end
+	table.sort(below_base, function(a, b)
+		local ra, rb = a.base / a.route, b.base / b.route
+		if ra ~= rb then return ra > rb end
+		return a.item < b.item
+	end)
+	if #below_base > 0 then
+		log("action", #below_base .. " base prices are higher than the cost of making the item; "
+			.. "the largest gap is '" .. below_base[1].item .. "' (" .. below_base[1].base
+			.. " against " .. string.format("%.2f", below_base[1].route) .. ")")
+	end
+
 	run_hooks(items, opts.hooks or P.hooks)
 
 	P.items = items
@@ -103,7 +120,7 @@ function P.generate(opts)
 	local count = 0
 	for _ in pairs(items) do count = count + 1 end
 	log("action", "generated prices for " .. count .. " items")
-	return items, { dropped = dropped }
+	return items, { dropped = dropped, below_base = below_base }
 end
 
 -- Other mods call this while loading. The callback gets the whole table and

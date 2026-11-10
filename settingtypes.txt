@@ -28,6 +28,13 @@ mine_shop_gui_markup_grinding (Markup: Technic grinding, %) float 0 0 1000
 mine_shop_gui_markup_compressing (Markup: Technic compressing, %) float 0 0 1000
 mine_shop_gui_markup_extracting (Markup: Technic extracting, %) float 0 0 1000
 mine_shop_gui_markup_freezing (Markup: Technic freezing, %) float 0 0 1000
+mine_shop_gui_markup_ta2_electronic_fab (Markup: Techage TA2 electronic fab, %) float 0 0 1000
+mine_shop_gui_markup_ta3_electronic_fab (Markup: Techage TA3 electronic fab, %) float 0 0 1000
+mine_shop_gui_markup_ta4_electronic_fab (Markup: Techage TA4 electronic fab, %) float 0 0 1000
+mine_shop_gui_markup_ta4_doser (Markup: Techage TA4 doser, %) float 0 0 1000
+mine_shop_gui_markup_melting (Markup: Techage melting pot, %) float 0 0 1000
+mine_shop_gui_markup_ta3_melting (Markup: Techage TA3 furnace, %) float 0 0 1000
+mine_shop_gui_markup_milling (Markup: Techage milling, %) float 0 0 1000
 
 [Item currency]
 

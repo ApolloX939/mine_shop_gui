@@ -732,7 +732,7 @@ mtt.register("generate: real prices for Minetest Game", function(callback)
 	assert(near(items["default:stick"].price, 0.25), "4 sticks from one plank")
 	assert(near(items["default:steel_ingot"].price, core.get_modpath("technic") and 8 or 16),
 		"smelted from an iron lump (16), or from half a lump when Technic grinds it")
-	assert(near(items["default:clay"].price, 8), "4 clay lumps at 2 each")
+	assert(items["default:clay"].price <= 8 + 1e-9, "clay costs at most 4 lumps at 2 each (less with Techage's grinder)")
 	assert(items["default:paper"] and items["default:bookshelf"], "papyrus anchor prices paper and shelves")
 	for name, entry in pairs(items) do
 		assert(entry.price >= 0 and entry.price < math.huge, name)
@@ -868,7 +868,9 @@ mtt.register("technic: grinding markup of 100% puts ingots back at the lump pric
 	core.settings:set("mine_shop_gui_markup_grinding", "100")
 	local ok, err = pcall(function()
 		local items = mine_shop_gui.pricing.generate()
-		assert(near(items["default:steel_ingot"].price, 16))
+		-- Techage's melting pot makes 4 steel from 3 iron lumps and 1 coal: (3*16 + 8) / 4
+		local steel = (core.get_modpath("techage") and core.get_modpath("unified_inventory")) and 14 or 16
+		assert(near(items["default:steel_ingot"].price, steel), "steel: " .. items["default:steel_ingot"].price)
 		assert(near(items["default:gold_ingot"].price, 40))
 	end)
 	core.settings:remove("mine_shop_gui_markup_grinding")
@@ -884,3 +886,123 @@ mtt.register("technic: its own lumps and rubber trunk are priced", function(call
 end)
 
 end
+
+---------------------------------------------------------------- Techage (only when it is installed)
+
+-- No recipe may appear twice (same output and ingredients), whichever source it came from.
+mtt.register("collector: duplicate recipes from different sources are removed", function(callback)
+	local seen = {}
+	for _, r in ipairs(collect.recipes()) do
+		local parts = {}
+		for _, i in ipairs(r.inputs) do parts[#parts + 1] = (i.name or ("group:" .. i.group)) .. "*" .. i.count end
+		table.sort(parts)
+		local key = r.output.name .. "*" .. r.output.count .. "|" .. table.concat(parts, ",")
+		assert(not seen[key], "duplicate recipe " .. key)
+		seen[key] = true
+	end
+	callback()
+end)
+
+if core.get_modpath("techage") then
+
+mtt.register("techage: fabricator and doser recipes are collected through its API", function(callback)
+	local by_type, chip = {}, nil
+	for _, r in ipairs(collect.recipes()) do
+		by_type[r.type] = (by_type[r.type] or 0) + 1
+		if r.output.name == "techage:ta4_wlanchip" then chip = r end
+	end
+	for _, rtype in ipairs({ "ta2_electronic_fab", "ta3_electronic_fab", "ta4_electronic_fab", "ta4_doser" }) do
+		assert((by_type[rtype] or 0) > 0, "no " .. rtype .. " recipes")
+	end
+	assert(chip and chip.output.count == 8, "a WLAN chip recipe that makes 8")
+	local names = {}
+	for _, i in ipairs(chip.inputs) do names[i.name] = i.count end
+	assert(names["default:mese_crystal"] == 1 and names["default:gold_ingot"] == 1
+		and names["default:copper_ingot"] == 1 and names["techage:ta4_silicon_wafer"] == 1,
+		"inputs of the chip recipe")
+	callback()
+end)
+
+mtt.register("techage: chips and tubes are priced from their parts", function(callback)
+	local items = mine_shop_gui.pricing.generate()
+	local function p(name) return items[name].price end
+
+	local chip = items["techage:ta4_wlanchip"]
+	assert(chip and chip.source:find("electronic_fab"), "chip source: " .. tostring(chip and chip.source))
+	assert(near(chip.price, (p("default:mese_crystal") + p("default:copper_ingot")
+		+ p("default:gold_ingot") + p("techage:ta4_silicon_wafer")) / 8), "8 chips from one set of parts")
+
+	local tube = items["techage:vacuum_tube"]
+	assert(tube and near(tube.price, (p("default:glass") + p("basic_materials:copper_wire")
+		+ p("basic_materials:plastic_sheet") + p("techage:usmium_nuggets")) / 2),
+		"2 vacuum tubes, one of them paid for with a usmium nugget; got " .. tostring(tube and tube.price))
+	assert(items["techage:ta5_aichip"] and items["techage:ta5_ssd"], "later tiers are priced too")
+	callback()
+end)
+
+mtt.register("techage: markup applies per fabricator type", function(callback)
+	local before = mine_shop_gui.pricing.generate()["techage:ta4_wlanchip"]
+	core.settings:set("mine_shop_gui_markup_" .. before.source, "100")
+	local ok, err = pcall(function()
+		local after = mine_shop_gui.pricing.generate()["techage:ta4_wlanchip"]
+		assert(near(after.price, before.price * 2), "100% markup doubles the chip: " .. after.price)
+	end)
+	core.settings:remove("mine_shop_gui_markup_" .. before.source)
+	assert(ok, err)
+	callback()
+end)
+
+if core.get_modpath("unified_inventory") then
+
+mtt.register("techage: melting pot and mill recipes come from the craft guide", function(callback)
+	local found_iron, found_bronze, random_types = false, false, 0
+	for _, r in ipairs(collect.recipes()) do
+		if r.type == "melting" and r.output.name == "techage:iron_ingot"
+				and r.inputs[1].name == "default:iron_lump" and r.inputs[1].count == 1 then
+			found_iron = true
+		end
+		if r.type == "melting" and r.output.name == "default:bronze_ingot" and r.output.count == 4 then
+			found_bronze = true
+		end
+		if r.type:find("sieve") or r.type == "rinsing" or r.type:find("digging") then
+			random_types = random_types + 1
+		end
+	end
+	assert(found_iron, "iron lump melts to a Techage iron ingot")
+	assert(found_bronze, "3 copper + 1 tin melt to 4 bronze")
+	assert(random_types == 0, "random-output machines are not collected")
+	callback()
+end)
+
+end
+
+end
+
+mtt.register("derive: reports base prices that a recipe can undercut, without changing them", function(callback)
+	local prices, _, _, _, below = derive({
+		base = { ["t:cheap"] = 1, ["t:x"] = 10, ["t:y"] = 3 },
+		recipes = {
+			recipe("normal", { { "t:cheap", 2 } }, "t:x"), -- costs 2, base says 10
+			recipe("normal", { { "t:cheap", 2 } }, "t:y"), -- costs 2, base says 3 (not far off, still reported)
+			recipe("alloy", { { "t:cheap", 20 } }, "t:y"), -- dearer route, ignored
+		},
+	})
+	assert(near(prices["t:x"], 10) and near(prices["t:y"], 3), "base prices still win")
+	assert(near(below["t:x"], 2) and near(below["t:y"], 2), "cheapest route is reported")
+	assert(below["t:cheap"] == nil, "no recipe makes it, so nothing to report")
+	callback()
+end)
+
+mtt.register("generate: the report lists base prices above the cost of making the item", function(callback)
+	local _, report = mine_shop_gui.pricing.generate({
+		base = { ["default:cobble"] = 1, ["default:obsidian"] = 25, ["default:stone"] = 1 },
+		recipes = { { type = "melting", inputs = { { name = "default:cobble", count = 1 } },
+			output = { name = "default:obsidian", count = 1 } } },
+		groups = {}, flags = {}, hooks = {},
+	})
+	assert(#report.below_base == 1, "one gap, got " .. #report.below_base)
+	local gap = report.below_base[1]
+	assert(gap.item == "default:obsidian" and gap.base == 25 and near(gap.route, 1))
+	mine_shop_gui.pricing.generate() -- back to the real prices
+	callback()
+end)

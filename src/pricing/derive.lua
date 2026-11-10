@@ -9,11 +9,13 @@
 --   markup  = function(recipe_type) return 0.1 end,   optional, fraction added on top
 --   flags   = { ["mod:item"] = { no_buy = true, no_sell = true } },   the items' own flags
 -- }
--- returns prices, source, dropped, flags
+-- returns prices, source, dropped, flags, below_base
 --   prices   item -> price units
 --   source   item -> "base" or the recipe type that gave the price
 --   dropped  list of items whose price could not settle (see below)
 --   flags    item -> { no_buy = true, no_sell = true } (only items that have any)
+--   below_base  item -> cheapest recipe cost, for items with a base price that a
+--            recipe can make for less. The base price still wins; this only reports.
 --
 -- Each item gets the cheapest cost over all its recipes, found by relaxing
 -- prices repeatedly until nothing gets cheaper. That makes cycles harmless
@@ -42,7 +44,7 @@ local function union(a, b)
 end
 
 local function relax(opts, excluded)
-	local prices, source, flags = {}, {}, {}
+	local prices, source, flags, below = {}, {}, {}, {}
 	local own = opts.flags or {}
 	for name, price in pairs(opts.base) do
 		prices[name] = price
@@ -72,7 +74,7 @@ local function relax(opts, excluded)
 		local any = false
 		for _, recipe in ipairs(opts.recipes) do
 			local out = recipe.output.name
-			if source[out] ~= "base" and not excluded[out] then
+			if not excluded[out] then
 				local cost, complete, inherited = 0, true, nil
 				for _, input in ipairs(recipe.inputs) do
 					local price, supplier = input_price(input)
@@ -84,7 +86,12 @@ local function relax(opts, excluded)
 					local markup = opts.markup and opts.markup(recipe.type) or 0
 					local candidate = cost * (1 + markup) / (recipe.output.count or 1)
 					local current = prices[out]
-					if current == nil or candidate < current * (1 - TOLERANCE) then
+					if source[out] == "base" then
+						-- fixed price: only note that a recipe could make it for less
+						if candidate < current * (1 - TOLERANCE) and (below[out] == nil or candidate < below[out]) then
+							below[out] = candidate
+						end
+					elseif current == nil or candidate < current * (1 - TOLERANCE) then
 						prices[out] = candidate
 						source[out] = recipe.type
 						flags[out] = union(own[out], inherited)
@@ -94,16 +101,16 @@ local function relax(opts, excluded)
 				end
 			end
 		end
-		if not any then return prices, source, flags, nil end
+		if not any then return prices, source, flags, nil, below end
 	end
-	return prices, source, flags, unstable
+	return prices, source, flags, unstable, below
 end
 
 return function(opts)
 	local excluded, dropped = {}, {}
-	local prices, source, flags, unstable
+	local prices, source, flags, unstable, below
 	for _ = 1, MAX_ATTEMPTS do
-		prices, source, flags, unstable = relax(opts, excluded)
+		prices, source, flags, unstable, below = relax(opts, excluded)
 		if not unstable then break end
 		for name in pairs(unstable) do
 			if not excluded[name] then
@@ -114,8 +121,8 @@ return function(opts)
 	end
 	if unstable then
 		-- Still not settled after dropping loops: price only what is certain.
-		prices, source, flags = relax(opts, setmetatable({}, { __index = function() return true end }))
+		prices, source, flags, _, below = relax(opts, setmetatable({}, { __index = function() return true end }))
 	end
 	table.sort(dropped)
-	return prices, source, dropped, flags
+	return prices, source, dropped, flags, below
 end
