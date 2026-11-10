@@ -17,6 +17,11 @@ mine_shop_gui_scale_unified_money (Scale: unified_money) float 1 0.0001
 mine_shop_gui_scale_credits (Scale: credits) float 1 0.0001
 mine_shop_gui_scale_items (Scale: item currency) float 0.05 0.0001
 
+[Shop]
+
+# The most items a player can buy in one go.
+mine_shop_gui_max_amount (Largest purchase) int 1000 1 65535
+
 [Pricing]
 
 # Percentage added to the cost of items made with each recipe type.

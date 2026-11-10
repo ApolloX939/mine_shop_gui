@@ -25,6 +25,14 @@ function adapter.round(amount)
 	return amount
 end
 
+function adapter.snapshot(player)
+	return um().get_balance_safe(player)
+end
+
+function adapter.restore(player, balance)
+	um().set_balance_safe(player, balance)
+end
+
 function adapter.balance(player)
 	return um().get_balance_safe(player)
 end

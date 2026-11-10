@@ -1163,3 +1163,479 @@ mtt.register("techage: prices the machines undercut are lowered, the unit is not
 end)
 
 end
+
+---------------------------------------------------------------- shop: trading
+
+local trade = mine_shop_gui.shop.trade
+local catalog_api = mine_shop_gui.shop.catalog
+local ui = mine_shop_gui.shop.ui
+local pricing_api = mine_shop_gui.pricing
+
+local function has_stack(inv, text)
+	return inv:contains_item("main", ItemStack(text))
+end
+
+mtt.register("shop trade: buying pays, makes change and delivers", function(callback)
+	use("currency")
+	pricing_api.generate()
+	with_player("shop_buyer1", function(_, inv)
+		inv:add_item("main", ItemStack("currency:minegeld")) -- 100 cents
+		local ok, info = trade.buy("shop_buyer1", "default:cobble", 10) -- 10 units * 5 cents
+		assert(ok, tostring(info))
+		assert(info.cost == 50 and info.amount == 10)
+		assert(has_stack(inv, "default:cobble 10"))
+		assert(count_value(inv, CENTS) == 50, "change: " .. count_value(inv, CENTS))
+	end)
+	callback()
+end)
+
+mtt.register("shop trade: buying more than the player can afford changes nothing", function(callback)
+	use("currency")
+	pricing_api.generate()
+	with_player("shop_buyer2", function(_, inv)
+		inv:add_item("main", ItemStack("currency:minegeld_cent_25"))
+		local ok, why = trade.buy("shop_buyer2", "default:cobble", 10)
+		assert(ok == false and why == "insufficient_funds", tostring(why))
+		assert(count_value(inv, CENTS) == 25)
+		assert(not has_stack(inv, "default:cobble"))
+	end)
+	callback()
+end)
+
+mtt.register("shop trade: a purchase that cannot be delivered is paid back", function(callback)
+	use("currency")
+	pricing_api.generate()
+	with_player("shop_buyer3", function(_, inv)
+		inv:set_size("main", 2)
+		inv:set_stack("main", 1, ItemStack("currency:minegeld_cent_10"))
+		inv:set_stack("main", 2, ItemStack("default:dirt 99"))
+		local ok, why = trade.buy("shop_buyer3", "default:cobble", 1) -- 5 cents, the change takes the coin's slot
+		assert(ok == false and why == "no_room", tostring(why))
+		assert(count_value(inv, CENTS) == 10, "the 10 cent coin is back: " .. count_value(inv, CENTS))
+		assert(not has_stack(inv, "default:cobble"))
+		assert(has_stack(inv, "default:dirt 99"))
+	end)
+	callback()
+end)
+
+mtt.register("shop trade: an undeliverable purchase restores credits and unified_money too", function(callback)
+	pricing_api.generate()
+	if api.adapters.credits.available() then
+		use("credits")
+		with_player("shop_buyer4", function(_, inv)
+			inv:set_size("main", 1)
+			inv:set_stack("main", 1, ItemStack("default:dirt 99"))
+			reset_credits("shop_buyer4", 100)
+			local ok, why = trade.buy("shop_buyer4", "default:cobble", 1)
+			assert(ok == false and why == "no_room", tostring(why))
+			assert(credits.get_balance_digital("shop_buyer4") == 100, "digital balance restored")
+		end)
+	end
+	if api.adapters.unified_money.available() then
+		use("unified_money")
+		with_player("shop_buyer5", function(_, inv)
+			inv:set_size("main", 1)
+			inv:set_stack("main", 1, ItemStack("default:dirt 99"))
+			unified_money.set_balance_safe("shop_buyer5", 50)
+			local ok, why = trade.buy("shop_buyer5", "default:cobble", 1)
+			assert(ok == false and why == "no_room", tostring(why))
+			assert(unified_money.get_balance("shop_buyer5") == 50, "balance restored")
+		end)
+	end
+	callback()
+end)
+
+mtt.register("shop trade: selling takes only items the shop accepts and pays", function(callback)
+	use("currency")
+	pricing_api.generate()
+	with_player("shop_seller1", function(_, inv)
+		inv:set_stack("main", 1, ItemStack("default:cobble 8"))
+		local flagged = ItemStack("default:cobble 2")
+		flagged:get_meta():set_string("no_sell", "true")
+		inv:set_stack("main", 2, flagged)
+		inv:set_stack("main", 3, ItemStack("default:pick_steel"))
+		local worn = ItemStack("default:pick_steel")
+		worn:set_wear(1000)
+		inv:set_stack("main", 4, worn)
+
+		assert(trade.sellable_count("shop_seller1", "default:cobble") == 8, "flagged stack is not counted")
+		assert(trade.sellable_count("shop_seller1", "default:pick_steel") == 1, "a worn tool is not counted")
+
+		local ok, info = trade.sell("shop_seller1", "default:cobble", 8) -- 8 * 0.5 * 5 cents
+		assert(ok, tostring(info))
+		assert(info.payout == 20, "payout " .. tostring(info.payout))
+		assert(count_value(inv, CENTS) == 20)
+		assert(inv:get_stack("main", 2):get_count() == 2, "the flagged stack is untouched")
+
+		local again, why = trade.sell("shop_seller1", "default:cobble", 1)
+		assert(again == false and why == "not_enough", tostring(why))
+	end)
+	callback()
+end)
+
+mtt.register("shop trade: sell all, and items worth less than a coin", function(callback)
+	use("currency")
+	pricing_api.generate()
+	with_player("shop_seller2", function(_, inv)
+		inv:set_stack("main", 1, ItemStack("default:cobble 7"))
+		inv:set_stack("main", 2, ItemStack("default:cobble 5"))
+		local ok, info = trade.sell_all("shop_seller2", "default:cobble")
+		assert(ok and info.amount == 12 and info.payout == 30, "12 * 2.5 cents rounds to 30")
+		assert(not has_stack(inv, "default:cobble"))
+	end)
+	local stick = pricing_api.get("default:stick")
+	if stick and near(stick.price, 0.25) then
+		with_player("shop_seller3", function(_, inv)
+			inv:set_stack("main", 1, ItemStack("default:stick 8"))
+			local ok, why = trade.sell("shop_seller3", "default:stick", 1)
+			assert(ok == false and why == "too_cheap", tostring(why))
+			assert(has_stack(inv, "default:stick 8"), "nothing was taken")
+			assert(trade.min_sell_amount("default:stick") == 4, "min " .. tostring(trade.min_sell_amount("default:stick")))
+			assert(trade.sell("shop_seller3", "default:stick", 4))
+		end)
+	end
+	callback()
+end)
+
+mtt.register("shop trade: flags and limits", function(callback)
+	use("currency")
+	pricing_api.generate({
+		base = { ["default:dirt"] = 1, ["default:sand"] = 1, ["default:gravel"] = 1 },
+		recipes = {}, groups = {}, hooks = {},
+		flags = { ["default:dirt"] = { no_buy = true }, ["default:sand"] = { no_sell = true } },
+	})
+	local ok, why = trade.quote("default:dirt", 1, "buy")
+	assert(ok == nil and why == "not_for_sale")
+	assert(trade.quote("default:dirt", 1, "sell"), "dirt can still be sold")
+	ok, why = trade.quote("default:sand", 1, "sell")
+	assert(ok == nil and why == "not_for_sale")
+	assert(trade.quote("default:sand", 1, "buy"), "sand can still be bought")
+	ok, why = trade.quote("default:stone", 1, "buy")
+	assert(ok == nil and why == "not_for_sale", "unpriced items cannot be traded")
+
+	core.settings:set("mine_shop_gui_max_amount", "5")
+	local good = trade.quote("default:gravel", 5, "buy")
+	local bad, bad_why = trade.quote("default:gravel", 6, "buy")
+	core.settings:remove("mine_shop_gui_max_amount")
+	assert(good and bad == nil and bad_why == "invalid_amount", "the purchase limit applies")
+	for _, amount in ipairs({ 0, -1, 1.5 }) do
+		local q, w = trade.quote("default:gravel", amount, "buy")
+		assert(q == nil and w == "invalid_amount", tostring(amount))
+	end
+	pricing_api.generate()
+	callback()
+end)
+
+---------------------------------------------------------------- shop: catalog
+
+mtt.register("shop catalog: categories, search and paging", function(callback)
+	pricing_api.generate()
+	local cats = catalog_api.categories()
+	assert(cats[1].id == "all" and cats[1].title == "Everything")
+	local default
+	for _, c in ipairs(cats) do
+		assert(c.count > 0 and core.registered_items[c.icon], "category " .. c.id .. " has an icon")
+		if c.id == "default" then default = c end
+	end
+	assert(default and default.count > 50, "the default mod is a category")
+
+	local found = catalog_api.items("all", "cobble")
+	local has_cobble = false
+	for i, r in ipairs(found) do
+		if r.name == "default:cobble" then has_cobble = true end
+		if i > 1 then assert(found[i - 1].key <= r.key, "sorted by title") end
+	end
+	assert(has_cobble, "search finds cobblestone")
+	assert(#catalog_api.items("all", "no such item xyz") == 0)
+	assert(#catalog_api.items("all", "") == #catalog_api.items("all"))
+	assert(#catalog_api.items("all", "mossy cobble") < #catalog_api.items("all", "cobble"), "all words must match")
+	assert(#catalog_api.items("all", "MOSSY") == #catalog_api.items("all", "mossy"), "search ignores case")
+
+	local list = catalog_api.items("all")
+	local slice, page, pages = catalog_api.page(list, 2, 24)
+	assert(#slice == 24 and page == 2 and pages == math.ceil(#list / 24))
+	_, page = catalog_api.page(list, 9999, 24)
+	assert(page == pages, "a page past the end is clamped")
+	_, page = catalog_api.page(list, -3, 24)
+	assert(page == 1)
+	callback()
+end)
+
+mtt.register("shop catalog: items that cannot be traded either way are left out", function(callback)
+	pricing_api.generate({
+		base = { ["default:dirt"] = 1, ["default:sand"] = 1, ["default:gravel"] = 1 },
+		recipes = {}, groups = {}, hooks = {},
+		flags = { ["default:dirt"] = { no_buy = true, no_sell = true }, ["default:sand"] = { no_buy = true } },
+	})
+	local names = {}
+	for _, r in ipairs(catalog_api.items("all")) do names[r.name] = true end
+	assert(not names["default:dirt"], "neither buyable nor sellable")
+	assert(names["default:sand"] and names["default:gravel"])
+	pricing_api.generate()
+	local again = {}
+	for _, r in ipairs(catalog_api.items("all")) do again[r.name] = true end
+	assert(again["default:dirt"], "the catalog follows the regenerated prices")
+	callback()
+end)
+
+---------------------------------------------------------------- shop: window
+
+local function capture()
+	local sent = {}
+	local original = ui.send
+	ui.send = function(name, spec) sent[name] = spec end
+	return sent, function() ui.send = original end
+end
+
+local function click(name, fields)
+	ui.handle(name, ui.state(name), fields)
+end
+
+local function pick_item(name, wanted)
+	local state = ui.state(name)
+	for i, record in ipairs(state.page_items or {}) do
+		if record.name == wanted then return "item_" .. i end
+	end
+end
+
+mtt.register("shop window: from search to a finished purchase and sale", function(callback)
+	use("currency")
+	pricing_api.generate()
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		with_player("shop_win1", function(_, inv)
+			inv:add_item("main", ItemStack("currency:minegeld")) -- 100 cents
+
+			ui.open("shop_win1", "cobble")
+			local state = ui.state("shop_win1")
+			assert(state.screen == "items" and sent.shop_win1:find("formspec_version[6]", 1, true))
+			assert(sent.shop_win1:find("Balance", 1, true) and sent.shop_win1:find("1.00", 1, true))
+			local button = assert(pick_item("shop_win1", "default:cobble"), "cobblestone is listed")
+			assert(sent.shop_win1:find(button, 1, true))
+			assert(sent.shop_win1:find("tooltip[" .. button, 1, true), "items carry a tooltip")
+
+			click("shop_win1", { [button] = "" })
+			assert(state.screen == "trade" and state.item == "default:cobble" and state.amount == 1)
+			assert(sent.shop_win1:find("BUY", 1, true) and sent.shop_win1:find("SELL", 1, true))
+
+			click("shop_win1", { amount = "10", buy = "BUY" })
+			assert(state.message and state.message.ok, "the purchase succeeded")
+			assert(has_stack(inv, "default:cobble 10") and count_value(inv, CENTS) == 50)
+			assert(sent.shop_win1:find("Bought", 1, true))
+
+			click("shop_win1", { amount = "10", sellall = "x" })
+			assert(state.message.ok and not has_stack(inv, "default:cobble"))
+			assert(count_value(inv, CENTS) == 75, "sold 10 for 25: " .. count_value(inv, CENTS))
+		end)
+	end)
+	restore()
+	assert(ok, err)
+	callback()
+end)
+
+mtt.register("shop window: amount controls and clamping", function(callback)
+	use("currency")
+	pricing_api.generate()
+	local _, restore = capture()
+	local ok, err = pcall(function()
+		with_player("shop_win2", function()
+			ui.open("shop_win2", "cobble")
+			click("shop_win2", { [pick_item("shop_win2", "default:cobble")] = "" })
+			local state = ui.state("shop_win2")
+			click("shop_win2", { p10 = "+10" })
+			assert(state.amount == 11)
+			click("shop_win2", { p64 = "+64" })
+			assert(state.amount == 75)
+			click("shop_win2", { m64 = "-64" })
+			assert(state.amount == 11)
+			click("shop_win2", { m64 = "-64", m10 = "-10" })
+			assert(state.amount == 1, "never below 1")
+			click("shop_win2", { amount = "abc" })
+			assert(state.amount == 1, "text that is not a number is ignored")
+			click("shop_win2", { amount = "99999999" })
+			assert(state.amount == trade.max_amount(), "clamped to the purchase limit")
+			click("shop_win2", { amount = "7.9" })
+			assert(state.amount == 7)
+		end)
+	end)
+	restore()
+	assert(ok, err)
+	callback()
+end)
+
+mtt.register("shop window: navigation and forged fields", function(callback)
+	use("currency")
+	pricing_api.generate()
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		with_player("shop_win3", function(_, inv)
+			inv:add_item("main", ItemStack("currency:minegeld"))
+			ui.open("shop_win3")
+			local state = ui.state("shop_win3")
+			assert(state.screen == "categories" and state.page_categories[1] == "all")
+
+			click("shop_win3", { cat_9999 = "" })
+			click("shop_win3", { cat_0 = "" })
+			click("shop_win3", { ["cat_1; evil"] = "" })
+			assert(state.screen == "categories", "positions that do not exist are ignored")
+			click("shop_win3", { buy = "BUY", sell = "x", sellall = "x" })
+			assert(not has_stack(inv, "default:cobble") and count_value(inv, CENTS) == 100,
+				"trade buttons do nothing outside the trade screen")
+
+			click("shop_win3", { cat_1 = "" })
+			assert(state.screen == "items" and state.category == "all")
+			click("shop_win3", { item_99999 = "" })
+			assert(state.screen == "items", "no such item position")
+
+			click("shop_win3", { next = "x" })
+			assert(state.page == 2)
+			click("shop_win3", { prev = "x" })
+			click("shop_win3", { prev = "x" })
+			assert(state.page == 1, "page never goes below 1")
+
+			click("shop_win3", { do_search = "x", query = "stone" })
+			assert(state.query == "stone" and state.page == 1)
+			click("shop_win3", { back = "x" })
+			assert(state.screen == "categories" and state.query == "")
+
+			-- closing the window forgets the state
+			assert(ui.on_fields(core.get_player_by_name("shop_win3"), "mine_shop_gui:shop", { quit = "true" }))
+			assert(ui.state("shop_win3") == nil)
+			assert(ui.on_fields(core.get_player_by_name("shop_win3"), "somebody_else:form", {}) == nil,
+				"other forms are left alone")
+		end)
+	end)
+	restore()
+	assert(ok, err)
+	callback()
+end)
+
+mtt.register("shop window: trade screen follows what an item allows", function(callback)
+	use("currency")
+	pricing_api.generate({
+		base = { ["default:dirt"] = 1, ["default:sand"] = 1 },
+		recipes = {}, groups = {}, hooks = {},
+		flags = { ["default:dirt"] = { no_buy = true }, ["default:sand"] = { no_sell = true } },
+	})
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		with_player("shop_win4", function(_, inv)
+			inv:set_stack("main", 1, ItemStack("default:dirt 20"))
+			ui.open("shop_win4", "dirt")
+			click("shop_win4", { [pick_item("shop_win4", "default:dirt")] = "" })
+			assert(sent.shop_win4:find("Not sold by the shop", 1, true), "dirt cannot be bought")
+			assert(not sent.shop_win4:find("button[1,7.5;3.6,1;buy;", 1, true), "so there is no buy button")
+			assert(sent.shop_win4:find("sellall", 1, true), "but it can be sold")
+
+			ui.open("shop_win4", "sand")
+			click("shop_win4", { [pick_item("shop_win4", "default:sand")] = "" })
+			assert(sent.shop_win4:find("The shop does not buy this", 1, true))
+			assert(sent.shop_win4:find(";buy;", 1, true))
+			assert(not sent.shop_win4:find(";sell;", 1, true), "sand cannot be sold")
+		end)
+	end)
+	restore()
+	pricing_api.generate()
+	assert(ok, err)
+	callback()
+end)
+
+mtt.register("shop window: the /shop command", function(callback)
+	use("currency")
+	pricing_api.generate()
+	local command = core.registered_chatcommands["shop"]
+	assert(command, "the command is registered")
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		local done, message = command.func("shop_cmd1", "")
+		assert(done == true and ui.state("shop_cmd1").screen == "categories" and sent.shop_cmd1)
+		done = command.func("shop_cmd2", "cobble")
+		assert(done == true and ui.state("shop_cmd2").screen == "items" and ui.state("shop_cmd2").query == "cobble")
+
+		api.active = nil
+		done, message = command.func("shop_cmd3", "")
+		assert(done == false and message, "no currency, no shop")
+		api.resolve()
+
+		local was = pricing_api.generated
+		pricing_api.generated = false
+		done, message = command.func("shop_cmd4", "")
+		pricing_api.generated = was
+		assert(done == false and message, "prices not ready")
+	end)
+	restore()
+	api.resolve()
+	assert(ok, err)
+	callback()
+end)
+
+---------------------------------------------------------------- shop: window syntax (formspec_ast)
+
+if core.get_modpath("formspec_ast") then
+
+-- Every element the window builder writes must survive parsing: the parser
+-- drops anything malformed, so the counts per element type must agree.
+local ELEMENTS = { "label", "button", "item_image_button", "item_image", "field", "tooltip",
+	"field_close_on_enter" }
+
+local function written(spec)
+	local counts = {}
+	for name in spec:gmatch("([%a_]+)%[") do counts[name] = (counts[name] or 0) + 1 end
+	return counts
+end
+
+local function parsed(tree)
+	local counts = {}
+	for node in formspec_ast.walk(tree) do counts[node.type] = (counts[node.type] or 0) + 1 end
+	return counts
+end
+
+local function check_syntax(spec, what)
+	local tree = formspec_ast.parse(spec)
+	assert(tree, what .. ": the parser rejected the window")
+	local want, got = written(spec), parsed(tree)
+	for _, element in ipairs(ELEMENTS) do
+		assert((want[element] or 0) == (got[element] or 0), string.format(
+			"%s: %d x %s written but %d parsed", what, want[element] or 0, element, got[element] or 0))
+	end
+	assert(want.formspec_version == 1 and want.size == 1, what .. ": one version and one size")
+end
+
+mtt.register("shop window: every screen is valid formspec syntax", function(callback)
+	use("currency")
+	pricing_api.generate()
+	local sent, restore = capture()
+	local ok, err = pcall(function()
+		with_player("shop_syntax", function(_, inv)
+			inv:set_stack("main", 1, ItemStack("default:cobble 5"))
+			inv:set_stack("main", 2, ItemStack("currency:minegeld"))
+
+			ui.open("shop_syntax")
+			check_syntax(sent.shop_syntax, "categories")
+
+			click("shop_syntax", { cat_1 = "" })
+			check_syntax(sent.shop_syntax, "items")
+			click("shop_syntax", { next = "x" })
+			check_syntax(sent.shop_syntax, "items, page 2")
+
+			ui.open("shop_syntax", "cobble")
+			check_syntax(sent.shop_syntax, "search results")
+			ui.open("shop_syntax", "no such thing at all")
+			check_syntax(sent.shop_syntax, "empty search")
+
+			ui.open("shop_syntax", "cobble")
+			click("shop_syntax", { [pick_item("shop_syntax", "default:cobble")] = "" })
+			check_syntax(sent.shop_syntax, "trade")
+			click("shop_syntax", { amount = "3", buy = "BUY" })
+			check_syntax(sent.shop_syntax, "trade after a purchase")
+			ui.state("shop_syntax").message = { ok = false, text = "a message, with [brackets]; and commas" }
+			ui.show("shop_syntax")
+			check_syntax(sent.shop_syntax, "trade with a message")
+		end)
+	end)
+	restore()
+	assert(ok, err)
+	callback()
+end)
+
+end

@@ -14,6 +14,9 @@
 --   withdraw(player, amt)   take amt from the player; returns true, or false + reason
 --   deposit(player, amt)    give amt to the player; returns true, or false + reason
 --   format(amount)          human readable string
+--   snapshot(player)        remember everything a payment could change
+--   restore(player, snap)   put it back (used to undo a payment when the goods
+--                           cannot be delivered)
 --   unit()                  smallest amount the adapter can pay (a whole number)
 --   default_scale           currency amount per price unit; overridden by the
 --                           `mine_shop_gui_scale_<name>` setting
@@ -136,6 +139,17 @@ function api.price(units, mode)
 	if mode == "buy" then return math.max(amount, unit) end
 	if amount < unit then return nil, "too_cheap" end
 	return amount
+end
+
+-- Remember the player's money so a payment can be undone. Returns nil if there
+-- is nothing to remember (no currency, or the player is offline).
+function api.snapshot(player)
+	if not api.active then return nil end
+	return api.active.snapshot(player)
+end
+
+function api.restore(player, snapshot)
+	if api.active and snapshot ~= nil then api.active.restore(player, snapshot) end
 end
 
 function api.format(amount)

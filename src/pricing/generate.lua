@@ -144,6 +144,7 @@ function P.generate(opts)
 
 	P.items = items
 	P.generated = true
+	P.generation = (P.generation or 0) + 1
 	local count = 0
 	for _ in pairs(items) do count = count + 1 end
 	log("action", "generated prices for " .. count .. " items")

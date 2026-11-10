@@ -118,6 +118,16 @@ function M.new(def)
 		return math.floor(amount / unit + 0.5) * unit
 	end
 
+	function self.snapshot(player)
+		local inv = get_inventory(player)
+		return inv and inv:get_list("main")
+	end
+
+	function self.restore(player, snapshot)
+		local inv = get_inventory(player)
+		if inv then inv:set_list("main", snapshot) end
+	end
+
 	function self.balance(player)
 		local inv = get_inventory(player)
 		if not inv then return nil end

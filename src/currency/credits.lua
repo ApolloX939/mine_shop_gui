@@ -62,6 +62,20 @@ function adapter.round(amount)
 	return math.floor(amount + 0.5)
 end
 
+function adapter.snapshot(player)
+	local inv = get_inventory(player)
+	if not inv then return nil end
+	return { digital = mod().get_balance_digital(player), list = inv:get_list("main") }
+end
+
+function adapter.restore(player, snapshot)
+	local inv = get_inventory(player)
+	if inv then inv:set_list("main", snapshot.list) end
+	-- add_coin changes the balance by an amount, so apply the difference
+	local difference = snapshot.digital - mod().get_balance_digital(player)
+	if difference ~= 0 then mod().add_coin(player, difference) end
+end
+
 function adapter.balance(player)
 	local inv = get_inventory(player)
 	if not inv then return nil end

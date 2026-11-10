@@ -31,6 +31,12 @@ core.register_on_mods_loaded(function()
 	core.after(0, function() mine_shop_gui.pricing.generate() end)
 end)
 
+-- The shop window: trading, the item list, and the /shop command.
+mine_shop_gui.shop = {}
+load("src/shop/trade")
+load("src/shop/catalog")
+load("src/shop/ui")
+
 -- Integration tests, only when the mtt test framework is enabled.
 if core.get_modpath("mtt") and mtt and mtt.enabled then
 	load("mtt")
