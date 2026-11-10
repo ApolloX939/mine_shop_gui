@@ -77,7 +77,19 @@ All three are optional dependencies, reached through one adapter interface.
 - Input items may be aliases or groups in other mods, so resolve names through `core.registered_items` and aliases before using them.
 - `separating` is mostly the reverse of alloying (bronze dust to copper dust plus tin dust) and also has a 34-step uranium chain. These recipes have several different outputs, so a cost cannot be split between them without a rule.
 
-## Pricing outline (not yet decided in detail)
+## Recipe-derived pricing (decided; core implemented)
 
-- Compute derived prices after all mods load, using `core.get_all_craft_recipes` plus Technic's registered machine recipes (API not yet checked).
-- Detect recipe cycles (for example currency coin and note recipes).
+- **Cheapest route:** an item costs the lowest cost over all its recipes (craft, smelt, machine, uncraft). Computed by relaxing prices until nothing gets cheaper, so cycles such as block <-> ingots settle on their own. With a sell ratio below 100% no buy/sell loop can make money.
+- **Base prices are fixed:** an item with a base price is never overridden by a recipe.
+- **Markup:** configurable percentage per recipe type (crafting, smelting, and each Technic machine type), default 0%. The derivation takes a `markup(recipe_type)` function.
+- **Multi-output recipes (Technic separating) are skipped.** They mostly undo alloying, and splitting cost between outputs has no right answer.
+- **Groups:** a group ingredient costs as much as its cheapest priced member.
+- **Unpriced ingredient means no price** for the result. Items with no price cannot be bought or sold.
+- **Value-creating loops** (for example 1 a -> 2 a) never settle. Items in such a loop lose their derived price and are reported, instead of being priced near zero.
+- Implemented as a pure function in `src/pricing/derive.lua` (`mine_shop_gui.pricing.derive`), tested with `mtt`. Not yet wired to real recipes.
+
+### Still to build
+
+- A collector that turns `core.get_all_craft_recipes` (types `normal`, `shapeless`, `cooking`) and `technic.recipes` into the recipe list, and builds group membership. It must run after technic's own `register_on_mods_loaded` callback.
+- The base price file and a seed list generated from the raw items in the installed mods.
+- Markup settings in `settingtypes.txt`.

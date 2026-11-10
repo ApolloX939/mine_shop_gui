@@ -13,6 +13,12 @@ All answered; see `PLAN.md`.
 
 ## Tasks
 
+- [x] Pricing derivation core (`src/pricing/derive.lua`) with tests.
+- [ ] Recipe collector: `core.get_all_craft_recipes` plus `technic.recipes`, single-output only, group membership, after technic's callback (add `technic` to `optional_depends`).
+- [ ] Base price file (format, loading) and a seed list from the raw items in the installed mods.
+- [ ] Markup settings per recipe type in `settingtypes.txt`.
+- [ ] Run the derivation on the real recipes and review the results for odd prices.
+
 - [x] Write the currency adapter layer (`currency`, `unified_money`, `credits`, `items` behind one interface).
 - [x] Check Technic's recipe registration API for machine recipes. See `PLAN.md`.
 - [x] Add `mod.conf` and `init.lua`.
