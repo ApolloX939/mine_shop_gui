@@ -379,12 +379,73 @@ mtt.register("derive: cheapest route wins", function(callback)
 	callback()
 end)
 
-mtt.register("derive: base prices are never overridden", function(callback)
-	local prices, source = derive({
-		base = { ["t:a"] = 10, ["t:x"] = 100 },
-		recipes = { recipe("normal", { { "t:a" } }, "t:x") },
+mtt.register("derive: a base price is a ceiling that a cheaper recipe lowers", function(callback)
+	local prices, source, _, _, _, lowered = derive({
+		base = { ["t:a"] = 10, ["t:x"] = 100, ["t:y"] = 3 },
+		recipes = {
+			recipe("melting", { { "t:a" } }, "t:x"), -- makes x for 10, base says 100
+			recipe("normal", { { "t:a" } }, "t:y"),  -- makes y for 10, base says 3: stays
+		},
 	})
-	assert(near(prices["t:x"], 100) and source["t:x"] == "base")
+	assert(near(prices["t:x"], 10) and source["t:x"] == "melting", "x is lowered to the recipe cost")
+	assert(lowered["t:x"] == 100, "the original base price is reported")
+	assert(near(prices["t:y"], 3) and source["t:y"] == "base" and lowered["t:y"] == nil,
+		"a recipe that costs more changes nothing")
+	callback()
+end)
+
+mtt.register("derive: a fixed base price is never lowered, only reported", function(callback)
+	local prices, source, _, _, below, lowered = derive({
+		base = { ["t:a"] = 10, ["t:x"] = { price = 100, fixed = true }, ["t:y"] = { price = 3, fixed = false } },
+		recipes = {
+			recipe("melting", { { "t:a" } }, "t:x"),
+			recipe("melting", { { "t:a", 0.1 } }, "t:y"),
+		},
+	})
+	assert(near(prices["t:x"], 100) and source["t:x"] == "base", "fixed price stays")
+	assert(near(below["t:x"], 10) and lowered["t:x"] == nil, "and is reported as undercut")
+	assert(near(prices["t:y"], 1) and lowered["t:y"] == 3, "fixed = false behaves like a plain number")
+	callback()
+end)
+
+mtt.register("derive: a lowered base price takes on the flags of the cheaper route", function(callback)
+	local _, _, _, flags = derive({
+		base = { ["t:flagged"] = 1, ["t:x"] = 50 },
+		flags = { ["t:flagged"] = { no_buy = true }, ["t:x"] = { no_sell = true } },
+		recipes = { recipe("melting", { { "t:flagged" } }, "t:x") },
+	})
+	assert(flags["t:x"].no_buy and flags["t:x"].no_sell, "own flag kept, inherited flag added")
+	callback()
+end)
+
+mtt.register("derive: cutting a loop leaves everything downstream of it priced", function(callback)
+	-- 2 sand compress to 1 sandstone, but 1 sandstone grinds to 4 sand: a gain of 2x per turn
+	local prices, _, dropped = derive({
+		base = { ["t:sand"] = 1 },
+		recipes = {
+			recipe("compressing", { { "t:sand", 2 } }, "t:sandstone"),
+			recipe("grinding", { { "t:sandstone" } }, "t:sand", 4),
+			recipe("normal", { { "t:sandstone", 2 } }, "t:wall"),
+			recipe("normal", { { "t:wall" } }, "t:stair", 2),
+		},
+	})
+	assert(near(prices["t:sand"], 1), "the base-priced member is held at its base price")
+	assert(near(prices["t:sandstone"], 2), "sandstone costs 2 sand")
+	assert(near(prices["t:wall"], 4) and near(prices["t:stair"], 2), "downstream items keep their prices")
+	assert(#dropped == 0, "nothing was left unpriced")
+	callback()
+end)
+
+mtt.register("derive: a value-creating loop holds a base-priced item at its base price", function(callback)
+	local prices, _, dropped = derive({
+		base = { ["t:seed"] = 8, ["t:clone"] = 5 },
+		recipes = {
+			recipe("normal", { { "t:seed" } }, "t:clone"),
+			recipe("normal", { { "t:clone" } }, "t:clone", 2), -- duplicates itself
+		},
+	})
+	assert(near(prices["t:clone"], 5), "falls back to the base price, not to zero")
+	assert(#dropped == 0, "it still has a price, so it is not dropped")
 	callback()
 end)
 
@@ -433,7 +494,7 @@ mtt.register("derive: block and ingot cycle settles at the cheapest cost", funct
 	callback()
 end)
 
-mtt.register("derive: a loop that creates value is dropped, not priced near zero", function(callback)
+mtt.register("derive: a loop that creates value is cut, the item keeps its outside route", function(callback)
 	local prices, _, dropped = derive({
 		base = { ["t:seed"] = 8 },
 		recipes = {
@@ -442,9 +503,41 @@ mtt.register("derive: a loop that creates value is dropped, not priced near zero
 			recipe("normal", { { "t:seed" } }, "t:fine"),
 		},
 	})
-	assert(prices["t:clone"] == nil, "clone has no price")
+	assert(near(prices["t:clone"], 8), "priced from the seed, not driven towards zero")
 	assert(near(prices["t:fine"], 8), "unrelated items keep their price")
-	assert(#dropped == 1 and dropped[1] == "t:clone")
+	assert(#dropped == 0, "nothing is left unpriced")
+	callback()
+end)
+
+mtt.register("derive: a loop with no outside route stays unpriced", function(callback)
+	local prices, _, dropped = derive({
+		base = { ["t:seed"] = 8 },
+		recipes = {
+			recipe("normal", { { "t:a" } }, "t:b", 2),
+			recipe("normal", { { "t:b" } }, "t:a", 2),
+			recipe("normal", { { "t:seed" } }, "t:fine"),
+		},
+	})
+	assert(prices["t:a"] == nil and prices["t:b"] == nil, "no way in, no price")
+	assert(near(prices["t:fine"], 8))
+	callback()
+end)
+
+mtt.register("derive: a gaining loop with no base price is priced from its outside routes", function(callback)
+	-- glass is made from sand, ground into fragments (4 per glass), and 4 fragments melt into 2 glass
+	local prices, _, dropped = derive({
+		base = { ["t:sand"] = 1 },
+		recipes = {
+			recipe("cooking", { { "t:sand" } }, "t:glass"),
+			recipe("grinding", { { "t:glass" } }, "t:fragments", 4),
+			recipe("melting", { { "t:fragments", 4 } }, "t:glass", 2),
+			recipe("normal", { { "t:glass", 3 } }, "t:slab", 6),
+		},
+	})
+	assert(near(prices["t:glass"], 1), "glass keeps the price of making it from sand")
+	assert(near(prices["t:fragments"], 0.25), "fragments are priced from the held glass")
+	assert(near(prices["t:slab"], 0.5), "slabs downstream are priced too")
+	assert(#dropped == 0)
 	callback()
 end)
 
@@ -571,7 +664,8 @@ end)
 
 mtt.register("price files: the shipped files apply only to what is installed", function(callback)
 	local prices, unknown = base_prices.load()
-	assert(prices["default:cobble"] == 1, "game file for 'minetest' is loaded")
+	assert(prices["default:cobble"].price == 1 and prices["default:cobble"].fixed == true,
+		"game file for 'minetest' is loaded; cobblestone is the fixed unit")
 	assert(prices["default:iron_lump"] == 16)
 	if core.get_modpath("technic_worldgen") then
 		assert(prices["technic:zinc_lump"] == 14, "technic_worldgen file is loaded")
@@ -978,31 +1072,94 @@ end
 
 end
 
-mtt.register("derive: reports base prices that a recipe can undercut, without changing them", function(callback)
-	local prices, _, _, _, below = derive({
-		base = { ["t:cheap"] = 1, ["t:x"] = 10, ["t:y"] = 3 },
-		recipes = {
-			recipe("normal", { { "t:cheap", 2 } }, "t:x"), -- costs 2, base says 10
-			recipe("normal", { { "t:cheap", 2 } }, "t:y"), -- costs 2, base says 3 (not far off, still reported)
-			recipe("alloy", { { "t:cheap", 20 } }, "t:y"), -- dearer route, ignored
-		},
-	})
-	assert(near(prices["t:x"], 10) and near(prices["t:y"], 3), "base prices still win")
-	assert(near(below["t:x"], 2) and near(below["t:y"], 2), "cheapest route is reported")
-	assert(below["t:cheap"] == nil, "no recipe makes it, so nothing to report")
-	callback()
-end)
-
-mtt.register("generate: the report lists base prices above the cost of making the item", function(callback)
+mtt.register("generate: lowered base prices and undercut fixed prices are reported", function(callback)
 	local _, report = mine_shop_gui.pricing.generate({
-		base = { ["default:cobble"] = 1, ["default:obsidian"] = 25, ["default:stone"] = 1 },
-		recipes = { { type = "melting", inputs = { { name = "default:cobble", count = 1 } },
-			output = { name = "default:obsidian", count = 1 } } },
+		base = { ["default:cobble"] = 1, ["default:obsidian"] = 25, ["default:glass"] = { price = 9, fixed = true },
+			["default:sand"] = 1 },
+		recipes = {
+			{ type = "melting", inputs = { { name = "default:cobble", count = 1 } },
+				output = { name = "default:obsidian", count = 1 } },
+			{ type = "melting", inputs = { { name = "default:sand", count = 1 } },
+				output = { name = "default:glass", count = 1 } },
+		},
 		groups = {}, flags = {}, hooks = {},
 	})
-	assert(#report.below_base == 1, "one gap, got " .. #report.below_base)
+	assert(#report.lowered == 1, "one lowered price, got " .. #report.lowered)
+	local drop = report.lowered[1]
+	assert(drop.item == "default:obsidian" and drop.base == 25 and near(drop.route, 1))
+	assert(#report.below_base == 1, "one fixed price undercut, got " .. #report.below_base)
 	local gap = report.below_base[1]
-	assert(gap.item == "default:obsidian" and gap.base == 25 and near(gap.route, 1))
+	assert(gap.item == "default:glass" and gap.base == 9 and near(gap.route, 1))
 	mine_shop_gui.pricing.generate() -- back to the real prices
 	callback()
 end)
+
+---------------------------------------------------------------- base prices as ceilings
+
+mtt.register("generate: no recipe makes an item for less than its price", function(callback)
+	local pricing = mine_shop_gui.pricing
+	local items, report = pricing.generate()
+	local recipes = collect.recipes()
+	local groups = collect.groups(recipes)
+	local fixed_gap = {}
+	for _, gap in ipairs(report.below_base) do fixed_gap[gap.item] = true end
+	for _, gap in ipairs(report.held) do fixed_gap[gap.item] = true end -- held inside a gaining loop
+
+	local checked, violations = 0, {}
+	for _, r in ipairs(recipes) do
+		local entry = items[r.output.name]
+		if entry and not fixed_gap[r.output.name] then
+			local cost, complete = 0, true
+			for _, input in ipairs(r.inputs) do
+				local price
+				if input.name then
+					price = items[input.name] and items[input.name].price
+				else
+					for _, member in ipairs(groups[input.group] or {}) do
+						local e = items[member]
+						if e and (not price or e.price < price) then price = e.price end
+					end
+				end
+				if not price then complete = false break end
+				cost = cost + price * input.count
+			end
+			if complete then
+				checked = checked + 1
+				local candidate = cost * (1 + pricing.markup(r.type)) / r.output.count
+				if candidate < entry.price * (1 - 1e-6) then
+					violations[#violations + 1] = string.format("%s: %s makes it for %.3f, price is %.3f",
+						r.output.name, r.type, candidate, entry.price)
+				end
+			end
+		end
+	end
+	assert(checked > 100, "checked only " .. checked .. " recipes")
+	assert(#violations == 0, #violations .. " items cost more than a recipe makes them for, e.g. "
+		.. (violations[1] or ""))
+	callback()
+end)
+
+mtt.register("generate: the shipped prices leave no fixed price undercut", function(callback)
+	local _, report = mine_shop_gui.pricing.generate()
+	local names = {}
+	for _, gap in ipairs(report.below_base) do names[#names + 1] = gap.item end
+	assert(#names == 0, "fixed prices above the cost of making the item: " .. table.concat(names, ", "))
+	callback()
+end)
+
+if core.get_modpath("techage") and core.get_modpath("unified_inventory") then
+
+mtt.register("techage: prices the machines undercut are lowered, the unit is not", function(callback)
+	local items, report = mine_shop_gui.pricing.generate()
+	assert(near(items["default:obsidian"].price, 1) and items["default:obsidian"].source == "melting",
+		"melting pot makes obsidian from cobblestone")
+	assert(items["default:clay_lump"].price < 2, "sand grinds to clay")
+	assert(items["default:cobble"].price == 1 and items["default:cobble"].source == "base",
+		"cobblestone is fixed")
+	local lowered = {}
+	for _, drop in ipairs(report.lowered) do lowered[drop.item] = drop end
+	assert(lowered["default:obsidian"] and lowered["default:obsidian"].base == 25)
+	callback()
+end)
+
+end

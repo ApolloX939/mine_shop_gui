@@ -7,6 +7,10 @@
 --   <world>/mine_shop_gui_prices.lua   optional, edited by the server owner
 -- Setting an item to `false` removes its price from everything loaded before it.
 --
+-- A price is a ceiling: when a recipe can make the item for less (Technic's
+-- grinder, Techage's melting pot, ...), the recipe's cost is used instead.
+-- To keep a price whatever recipes say, write it as { price = 1, fixed = true }.
+--
 -- <mod_id> is the `name` in the mod's mod.conf (preferred). A file named after
 -- the mod's folder is still found when the names differ, but that is the old
 -- style and is deprecated. Prices for a game or mod that is not installed are
@@ -39,6 +43,16 @@ function M.parse(path)
 			problems[#problems + 1] = "item name " .. describe(name) .. " is not a string"
 		elseif price == false then
 			prices[name] = false
+		elseif type(price) == "table" then
+			-- { price = 1, fixed = true }: a price that recipes may not lower
+			local p, fixed = price.price, price.fixed
+			if type(p) ~= "number" or p ~= p or p < 0 or p == math.huge then
+				problems[#problems + 1] = describe(name) .. " has an invalid price " .. describe(p)
+			elseif fixed ~= nil and type(fixed) ~= "boolean" then
+				problems[#problems + 1] = describe(name) .. ": 'fixed' must be true or false"
+			else
+				prices[name] = { price = p, fixed = fixed and true or false }
+			end
 		elseif type(price) ~= "number" or price ~= price or price < 0 or price == math.huge then
 			problems[#problems + 1] = describe(name) .. " has an invalid price " .. describe(price)
 		else

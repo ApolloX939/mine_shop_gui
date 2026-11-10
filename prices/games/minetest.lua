@@ -5,13 +5,13 @@
 return {
 	-- Anchors: these only make each other (cobble <-> stone, block <-> lump,
 	-- block <-> slabs), so a recipe cannot price them.
-	["default:cobble"] = 1,
+	["default:cobble"] = { price = 1, fixed = true }, -- the price unit itself
 	["default:coal_lump"] = 8,
 	["default:mese_crystal"] = 100,
 	["default:diamond"] = 150,
 	["default:mossycobble"] = 1,
 	["default:desert_cobble"] = 1,
-	["default:desert_sandstone"] = 2,
+	["default:desert_sandstone"] = 4, -- 4 desert sand
 
 	-- Earth
 	["default:dirt"] = 1,
