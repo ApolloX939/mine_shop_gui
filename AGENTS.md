@@ -37,6 +37,7 @@ locale/         # optional: translation files
 
 ## Working in this repo
 
+- `AGENTS.md` holds rules for AI agents only. Record design decisions, findings, and agreed approaches in `PLAN.md`. Record open questions and pending tasks in `TODO.md`. Do not put either in this file.
 - Make small, focused commits. The default branch is `master`.
 - After completing a piece of work, commit it without waiting to be asked.
 - Always ask the user before pushing. Never push to a remote without explicit confirmation, even if earlier pushes were approved.
