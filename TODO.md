@@ -16,7 +16,10 @@ All answered; see `PLAN.md`.
 - [x] Pricing derivation core (`src/pricing/derive.lua`) with tests.
 - [ ] Recipe collector: `core.get_all_craft_recipes` plus `technic.recipes`, single-output only, group membership, after technic's callback (add `technic` to `optional_depends`).
 - [x] Base price file format (Lua) and loader, with tests.
-- [ ] Seed `base_prices.lua`: raw items plus cycle anchors (cobblestone = 1). Needs price values for the main materials, see the question in the chat or below.
+- [x] Price files split into `prices/games/` and `prices/mods/`, seeded for Minetest Game and Technic.
+- [ ] After the collector exists, run the derivation on the real recipes and add anchors for items that are still unpriced (cycles, items only made by skipped recipes).
+- [ ] Decide prices for Ethereal, Everness, Techage and other content mods (currently unpriced).
+- [ ] Add price files for the other games (`mineclonia`, `mineclone2`) when you want to support them.
 - [ ] Markup settings per recipe type in `settingtypes.txt`.
 - [ ] Run the derivation on the real recipes and review the results for odd prices.
 

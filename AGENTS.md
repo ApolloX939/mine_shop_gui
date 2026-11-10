@@ -28,6 +28,7 @@ locale/         # optional: translation files
 - Build formspecs with `formspec_version[...]` set explicitly. Never trust fields from `core.register_on_player_receive_fields`: check the formname, the player, and validate every value server-side before acting on it.
 - Shop actions that move items or currency must be atomic: check inventory space and funds first, then apply both changes, and handle failure paths without losing or duplicating items.
 - Use `core.get_translator` (`S("...")`) for user-facing strings.
+- Price files live in `prices/games/<game_id>.lua` and `prices/mods/<mod_id>.lua`. Name a mod's file after the `name` in its `mod.conf`, never after its folder (folder names are deprecated). Every item named in a price file must exist; check against a world that has the mod loaded.
 - Declare every dependency in `mod.conf` (`depends` or `optional_depends`) and guard optional ones with `core.get_modpath("othermod")`.
 
 ## Testing and running

@@ -91,7 +91,12 @@ All three are optional dependencies, reached through one adapter interface.
 ### Base price file (decided: Lua)
 
 - Format: a Lua file that returns a table of `["mod:item"] = price units`. Comments and decimals are allowed. It runs in an empty environment, so it can only hold data (`src/pricing/base_prices.lua`).
-- Two files are merged: `base_prices.lua` in the mod (shipped), and an optional `<world>/mine_shop_gui_prices.lua` that overrides it. `false` in the world file removes an item's price. Invalid entries are logged and skipped.
+- Layout (decided): a `prices/` folder in the mod root.
+  - `prices/games/<game_id>.lua` for the running game (for example `minetest`, `mineclonia`, `mineclone2`).
+  - `prices/mods/<mod_id>.lua` for each enabled mod, where `<mod_id>` is the `name` in its `mod.conf` (preferred). A file named after the mod's folder is still found when the names differ, but that old style is deprecated and logs a warning.
+  - Files are merged in that order (game, then mods alphabetically), then an optional `<world>/mine_shop_gui_prices.lua` overrides everything. `false` removes an item's price from what was loaded before it.
+  - Files for a game or mod that is not installed are never read. Invalid entries are logged and skipped, and so are items that are not registered (the load reports them, which catches typos).
+- Seeded so far: `prices/games/minetest.lua` (cobblestone anchor, earth, logs, ore lumps, coal, mese, diamond) and `prices/mods/technic.lua` (zinc, lead, chromium, uranium, sulfur). Decorative Everness and Ethereal items are deliberately left unpriced for now. In the 51-mod test world this prices 23 items with none unknown.
 - Findings from dumping the installed content mods (51 mods, 4318 items): 618 items have no recipe at all. Most are Everness (275) and Ethereal (137), then Techage (89), default (66) and Technic (17).
 - Raw items alone are not enough. Items that can only be made inside a cycle (for example cobblestone <-> stone <-> mossy cobblestone) or only by a skipped multi-output recipe (dirt from Technic's separating) also need a base price, and cobblestone is the unit anchor. The derivation shows which items are still unpriced, so the seed list is built by running it and adding anchors until nothing important is missing.
 
