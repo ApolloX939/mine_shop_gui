@@ -45,7 +45,7 @@ All three are optional dependencies, reached through one adapter interface.
 - `src/currency/api.lua`: registry and the single interface the shop uses (`balance`, `withdraw`, `deposit`, `round`, `format`). Amounts are whole numbers in the active currency's smallest unit. `withdraw` and `deposit` are atomic and return `true` or `false, reason` (`invalid_amount`, `insufficient_funds`, `no_room`, `unavailable`).
 - `src/currency/denominations.lua`: shared adapter for item-based currencies. Paying removes all the player's money, then hands back change (greedy, largest first); the inventory is restored if the change does not fit.
 - Adapters: `currency` (cents), `unified_money`, `credits`, and `items` (any items listed in the `mine_shop_gui_item_currency` setting, for example emeralds under Mineclonia or VoxeLibre; unknown items are logged and ignored).
-- Auto order: currency, unified_money, credits, items. An explicit setting naming an unavailable currency falls back to auto with a warning.
+- Auto order: currency, cookies, unified_money, credits, items. An explicit setting naming an unavailable currency falls back to auto with a warning.
 - Callers must pass amounts already rounded with `api.round`. Amounts that are not a whole multiple of the currency's smallest unit are rejected, never silently adjusted.
 - `credits` payments spend the digital balance first, then physical stacks. Any surplus from a physical stack is returned to the digital balance, so the shop never has to create valued stacks. Payouts to the player are always digital. (Decided while implementing; revisit if physical change is wanted.)
 
@@ -57,6 +57,7 @@ All three are optional dependencies, reached through one adapter interface.
   - `"buy"`: rounded to the currency's smallest unit, never below one unit (never free unless the price itself is 0).
   - `"sell"`: the buy price times `mine_shop_gui_sell_ratio` (default 0.5), then scaled and rounded. If that is under one unit the sale is refused with `"too_cheap"`, and the shop should show the item as not sellable.
 - Rounding happens once, on the final total, never per item.
+- `cookies`: adapter for the custom Noclip Cookie mod (it is also named `currency`, so only one of it and Minegeld can exist). Uses its `cookies.get/set` jar API plus `currency:cookie` items in the inventory. Spends the jar first, then items; payouts go to the jar. Deliberately not in the README. Tested in a separate world holding only the cookie mod (see `AGENTS.md`).
 - Open: `unified_money` may allow fractional balances; its adapter currently treats 1 as the smallest unit.
 
 ## Testing notes

@@ -15,6 +15,7 @@ load("src/currency/denominations")
 load("src/currency/currency")
 load("src/currency/unified_money")
 load("src/currency/credits")
+load("src/currency/cookies")
 load("src/currency/items")
 
 -- Pricing: derives item prices from base prices and recipes.

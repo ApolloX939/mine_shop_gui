@@ -2,9 +2,9 @@
 
 # Which currency the shop uses.
 # 'auto' picks the first one detected, in this order:
-# currency, unified_money, credits, items.
+# currency, cookies, unified_money, credits, items.
 # 'items' uses the item currency configured below.
-mine_shop_gui_currency (Currency) enum auto auto,currency,unified_money,credits,items
+mine_shop_gui_currency (Currency) enum auto auto,currency,cookies,unified_money,credits,items
 
 # Fraction of the buy price that a player receives when selling (0.0 - 1.0).
 mine_shop_gui_sell_ratio (Sell price ratio) float 0.5 0.0 1.0

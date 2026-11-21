@@ -187,6 +187,79 @@ mtt.register("currency: offline player is unavailable", function(callback)
 	callback()
 end)
 
+---------------------------------------------------------------- cookies
+-- Only runs in a world where the Noclip Cookie mod is loaded.
+
+if rawget(_G, "cookies") and core.registered_items["currency:cookie"] then
+	local function reset_jar(name, jar)
+		assert(cookies.set(name, jar or 0))
+	end
+
+	mtt.register("cookies: auto selection finds the cookie mod", function(callback)
+		core.settings:set("mine_shop_gui_currency", "auto")
+		with_setting("mine_shop_gui_item_currency", "", function()
+			assert(api.resolve().name == "cookies")
+		end)
+		assert(api.is_money("currency:cookie"))
+		callback()
+	end)
+
+	mtt.register("cookies: spend the jar first, then cookie items", function(callback)
+		local c = use("cookies")
+		with_player("shop_cookie1", function(_, inv)
+			reset_jar("shop_cookie1", 10)
+			inv:add_item("main", ItemStack("currency:cookie 5"))
+			assert(c.balance("shop_cookie1") == 15)
+			assert(c.withdraw("shop_cookie1", 12) == true)
+			assert(cookies.get("shop_cookie1") == 0)
+			assert(count_value(inv, { ["currency:cookie"] = 1 }) == 3)
+			assert(c.deposit("shop_cookie1", 7) == true)
+			assert(cookies.get("shop_cookie1") == 7, "payouts go to the jar")
+			assert(c.balance("shop_cookie1") == 10)
+		end)
+		callback()
+	end)
+
+	mtt.register("cookies: invalid and unaffordable payments change nothing", function(callback)
+		local c = use("cookies")
+		with_player("shop_cookie2", function(_, inv)
+			reset_jar("shop_cookie2", 4)
+			inv:add_item("main", ItemStack("currency:cookie 2"))
+			local ok, why = c.withdraw("shop_cookie2", 7)
+			assert(ok == false and why == "insufficient_funds")
+			ok, why = c.withdraw("shop_cookie2", -1)
+			assert(ok == false and why == "invalid_amount")
+			ok, why = c.withdraw("shop_cookie2", 1.5)
+			assert(ok == false and why == "invalid_amount")
+			assert(c.balance("shop_cookie2") == 6 and cookies.get("shop_cookie2") == 4)
+		end)
+		callback()
+	end)
+
+	mtt.register("cookies: snapshot and restore undo a payment", function(callback)
+		local c = use("cookies")
+		with_player("shop_cookie3", function(_, inv)
+			reset_jar("shop_cookie3", 3)
+			inv:add_item("main", ItemStack("currency:cookie 4"))
+			local snap = c.snapshot("shop_cookie3")
+			assert(c.withdraw("shop_cookie3", 6) == true)
+			assert(c.balance("shop_cookie3") == 1)
+			c.restore("shop_cookie3", snap)
+			assert(cookies.get("shop_cookie3") == 3)
+			assert(count_value(inv, { ["currency:cookie"] = 1 }) == 4)
+		end)
+		callback()
+	end)
+
+	mtt.register("cookies: offline player is unavailable", function(callback)
+		local c = use("cookies")
+		assert(c.balance("shop_nobody") == nil)
+		local ok, why = c.withdraw("shop_nobody", 1)
+		assert(ok == false and why == "unavailable")
+		callback()
+	end)
+end
+
 ---------------------------------------------------------------- item currency
 -- The test config sets:
 --   mine_shop_gui_item_currency = default:goldblock=9, default:gold_ingot=1
