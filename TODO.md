@@ -28,6 +28,7 @@ All answered; see `PLAN.md`.
 - [ ] After the collector exists, run the derivation on the real recipes and add anchors for items that are still unpriced (cycles, items only made by skipped recipes).
 - [x] Ethereal prices (`prices/mods/ethereal.lua`), drafted by Claude: review the values.
 - [x] Everness prices (`prices/mods/everness.lua`), drafted by Claude: review the values.
+- [x] Skyblock: Zero and Skyblock: Two prices (`prices/games/skyblock_zero.lua`, `prices/mods/sbt.lua`), drafted by Claude: review the values, especially the guessed machine parts.
 - [x] Techage prices (`prices/mods/techage.lua`), drafted by Claude: review the values. Tiers climb about 3 to 4 times each.
 - [x] Remaining raw items priced where they can be traded; the rest is deliberately unpriced (see `PLAN.md`, "Remaining content prices"). 94% of visible items in the 51-mod world are priced.
 - [x] Base prices are ceilings, with `fixed = true` for anchors (decided). Gaining loops are cut. See `PLAN.md`.

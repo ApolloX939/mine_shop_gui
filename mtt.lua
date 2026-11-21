@@ -1968,3 +1968,31 @@ mtt.register("item currency: the shop works end to end with an item currency", f
 	assert(ok, err)
 	callback()
 end)
+
+---------------------------------------------------------------- Skyblock: Zero
+-- Only in a world that runs the skyblock_zero game.
+
+if rawget(_G, "sbz_api") then
+	mtt.register("sbz: price files name only registered items", function(callback)
+		local prices, unknown = base_prices.load()
+		assert(prices["sbz_resources:matter_dust"] == 5, "the skyblock_zero game file is loaded")
+		assert(#unknown == 0, "unknown items in price files: " .. table.concat(unknown, ", "))
+		if core.get_modpath("sbt") then
+			assert(prices["sbt:potato"] == 1, "the sbt file is loaded")
+		end
+		callback()
+	end)
+
+	mtt.register("sbz: machine recipes are collected and priced", function(callback)
+		local seen = {}
+		for _, recipe in ipairs(mine_shop_gui.pricing.collect.recipes()) do
+			seen[recipe.type] = (seen[recipe.type] or 0) + 1
+		end
+		assert((seen.crushing or 0) > 0, "crusher recipes are read")
+		assert((seen.compressing or 0) > 0, "compressor recipes are read")
+		assert((seen.ele_fab or 0) > 0, "electronics fabricator recipes are read")
+		local entry = mine_shop_gui.pricing.get("sbz_resources:matter_dust")
+		assert(entry and entry.price == 5)
+		callback()
+	end)
+end

@@ -258,6 +258,17 @@ Deliberately unpriced (a missing price means the item cannot be traded):
 - **Not goods:** ore nodes, liquid sources, fire and flames, bones, admin and test blocks, power and oil sources, wrench, prospector, sonic screwdriver, and filled barrels, canisters and cylinders (apart from the four recipes need).
 - **Cannot be made here:** mithril and nether armor and shields (need ingots from mods that are not installed); Technic's red and blue energy crystals, silver and mithril chests and dusts (need `moreores`); Ethereal's cooked dishes and Techage's sieve machines; pipeworks deployers and similar (their recipes need `mesecons`); everything that needs rice, soy sauce, sugar, garlic or a saucepan group from food mods that are not installed. If those mods are added, recipes will price what they can, and the rest needs a price file.
 
+### Skyblock: Zero and Skyblock: Two (drafted by Claude, open to adjustment)
+
+- Files: `prices/games/skyblock_zero.lua` (dusts, planets, plants, meteorite metal) and `prices/mods/sbt.lua` (minerals, animals, crops, parts). Values follow the hand-set values of the emc mod (`emc/data/base_items/sbz.lua`, `sbt.lua`), which use the same scale (matter dust 5, one unit is about a cobblestone).
+- New collector source: Skyblock's machine recipes (`sbz_api.recipe.registered_crafts`, filled one tick after loading, plus the `ele_fab` recipes from unified_inventory). Types seen: normal, cooking, crushing, compressing, centrifuging, blast_furnace, crystal_growing, decay_accelerating, alloying, engraver, pebble_enhancing, ele_fab. The shop builds prices one tick after `on_mods_loaded`, so the table is full by then.
+- Kitchen tools (mortar and pestle, cutting board, baking tray) and the mutator are catalysts that a recipe hands back. They get low fixed prices so they do not add their whole cost to every dish.
+- Loop anchors, each set to the cost of its ingredients: wheat/straw, honey/honey block, garlic clove/garlic, melon and pumpkin slices/whole, moss/dirt. `sbz_planets:dwarf_orb` is a base price of 153 that its own recipe (neutronium plus an orb makes 16) lowers.
+- Machine parts that no readable recipe makes (cable, case, motherboard, PSU, upgrade base, drills, rebreather) have guessed prices.
+- Not priced: the Advanced White Gold extractor and mayonnaise (their ingredients have no price), and everything that is only placed by the world or has no recipe (stubes variants, creative items, deprecated items).
+- sbt did not load completely in the test world (the game version has no `sbz_audio`, and several sbt files stop with errors), so recipes defined in those files, for example the computer parts, were not seen. Their base prices are ceilings and stay harmless when a recipe exists.
+- Test world: the Skyblock: Zero game with sbt, mtt and fakelib. The `sbz:` tests only run there; the other tests fail there for lack of a currency, so register only those.
+
 ### Shop window (implemented)
 
 Decisions (chosen with the owner): open with the `/shop` command first (a placeable block can come later), plain formspec with no extra mod, and an amount control made of a number field plus `-64 -10 -1 +1 +10 +64` buttons with a live total. The layout follows what I remember of the Minecraft EconomyShopGUI plugin the owner pointed to. I could not read the video, which only returned its title.

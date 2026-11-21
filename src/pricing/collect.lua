@@ -4,7 +4,8 @@
 -- Recipes come from the built-in crafting (normal, cooking), from Technic's
 -- machines, from Techage's electronic fabricators and doser, and (when
 -- unified_inventory is installed) from Techage's furnace, melting pot, grinder
--- and mill. Recipes with more than one output are skipped.
+-- and mill, and from Skyblock Zero's machines. Recipes with more than one output
+-- are skipped.
 
 local M = {}
 
@@ -231,6 +232,47 @@ local function guide_recipes()
 	return recipes
 end
 
+-- Skyblock Zero's machines (crushers, compressors, the electronics fabricator, ...)
+-- keep their recipes in sbz_api.recipe.registered_crafts, filled one tick after
+-- loading (the shop builds prices after that). The electronics fabricator's
+-- recipes go to unified_inventory directly, under the type "ele_fab".
+-- Entries without ingredients only tell the craft guide where an item comes from.
+local function sbz_recipes()
+	local recipes = {}
+	local api = rawget(_G, "sbz_api")
+	if not (api and type(api.recipe) == "table" and type(api.recipe.registered_crafts) == "table") then
+		return recipes
+	end
+	local crafts = {}
+	for _, craft in ipairs(api.recipe.registered_crafts) do crafts[#crafts + 1] = craft end
+	local ui = rawget(_G, "unified_inventory")
+	if ui and type(ui.crafts_for) == "table" and type(ui.crafts_for.recipe) == "table" then
+		for _, list in pairs(ui.crafts_for.recipe) do
+			for _, craft in ipairs(list) do
+				if craft.type == "ele_fab" then crafts[#crafts + 1] = craft end
+			end
+		end
+	end
+	for _, craft in ipairs(crafts) do
+		local out = craft.output
+		if type(out) == "table" then out = (#out == 1) and out[1] or nil end
+		if type(out) ~= "string" and out ~= nil then
+			local ok, text = pcall(function() return out:to_string() end)
+			out = ok and text or nil
+		end
+		local texts = {}
+		for _, item in pairs(craft.items or {}) do
+			if type(item) ~= "string" then texts = nil break end
+			texts[#texts + 1] = item
+		end
+		if out and texts then
+			local recipe = make_recipe(craft.type or "sbz", texts, out)
+			if recipe then recipes[#recipes + 1] = recipe end
+		end
+	end
+	return recipes
+end
+
 local function signature(recipe)
 	local parts = {}
 	for _, input in ipairs(recipe.inputs) do
@@ -246,7 +288,7 @@ end
 -- in sorted order is kept.
 function M.recipes()
 	local recipes = craft_recipes()
-	for _, source in ipairs({ technic_recipes, techage_recipes, guide_recipes }) do
+	for _, source in ipairs({ technic_recipes, techage_recipes, guide_recipes, sbz_recipes }) do
 		for _, recipe in ipairs(source()) do recipes[#recipes + 1] = recipe end
 	end
 	for _, recipe in ipairs(recipes) do
