@@ -90,7 +90,9 @@ local function build()
 		categories[1].icon = dearest.name
 	end
 
-	return { generation = P.generation, list = list, members = members, categories = categories }
+	local by_name = {}
+	for _, record in ipairs(list) do by_name[record.name] = record end
+	return { generation = P.generation, list = list, members = members, categories = categories, by_name = by_name }
 end
 
 local function data()
@@ -100,6 +102,17 @@ local function data()
 		cache.currency = currency
 	end
 	return cache
+end
+
+-- The listing record of an item ({ name, title, ... }), or nil.
+function C.record(name)
+	return data().by_name[name]
+end
+
+-- The name a player knows an item by: its title, or the technical name.
+function C.title(name)
+	local record = data().by_name[name]
+	return record and record.title or name
 end
 
 -- All categories, "Everything" first and "Other" last.

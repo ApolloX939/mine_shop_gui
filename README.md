@@ -10,6 +10,10 @@ Type `/shop`, or `/shop <words>` to jump straight to a search.
 2. **Items.** A grid of item pictures with the name and the price to buy under each one; hover for the sell price too. Prices and your balance are shown with a small picture of the currency (for example the Minegeld note).
 3. **Trade.** Pick an amount with the `-64 -10 -1 +1 +10 +64` buttons or type it. The total is shown, then **BUY**, **SELL**, or **SELL ALL**.
 
+The **Sell** button (top right of the category and item screens) lists everything in your inventory the shop buys, with what it would pay; pick one to sell it.
+
+Or use the command: `/sell hand|<itemstring>|<item name> [<amount>|all]`, for example `/sell hand`, `/sell default:cobble 20` or `/sell Gold Ingot all`. Without an amount one item is sold (`hand` sells the whole stack in your hand).
+
 Buying and selling are all-or-nothing. If the goods do not fit, or the money cannot be taken, nothing changes. Tools with wear and stacks marked as unsellable are never taken.
 
 ## Currencies

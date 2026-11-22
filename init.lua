@@ -37,6 +37,7 @@ mine_shop_gui.shop = {}
 load("src/shop/trade")
 load("src/shop/catalog")
 load("src/shop/ui")
+load("src/shop/sell_command")
 
 -- Integration tests, only when the mtt test framework is enabled.
 if core.get_modpath("mtt") and mtt and mtt.enabled then

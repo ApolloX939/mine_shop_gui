@@ -35,6 +35,8 @@ local REASONS = {
 	unavailable = S("The shop cannot do that right now."),
 }
 
+ui.REASONS = REASONS
+
 -- An amount as text, with the currency mark (tooltips and messages).
 local function money(amount)
 	return api.format_symbol(amount)
@@ -100,6 +102,7 @@ local function search_bar(state, x, width)
 		input_field(x, 1.2, width, 0.8, "query", state.query),
 		"field_close_on_enter[query;false]",
 		string.format("button[%g,1.2;2.2,0.8;do_search;%s]", x + width + 0.2, esc(S("Search"))),
+		string.format("button[13.1,1.2;1.4,0.8;show_sell;%s]", esc(S("Sell"))),
 	})
 end
 
@@ -167,6 +170,35 @@ local function items_screen(name, state)
 	return table.concat(out)
 end
 
+-- Everything in the player's inventory the shop buys, with what it would pay.
+local function sell_screen(name, state)
+	local list = trade.sellable_items(name)
+	local slice, page, pages = catalog.page(list, state.page, PER_PAGE)
+	state.page, state.page_items = page, {}
+
+	local out = {
+		header(name, S("Sell")),
+		string.format("button[0.5,1.2;2,0.8;back;%s]", esc(S("< Back"))),
+	}
+	if #list == 0 then
+		out[#out + 1] = "label[0.5,3;" .. esc(S("You have nothing the shop will buy.")) .. "]"
+	end
+	for i, entry in ipairs(slice) do
+		local title = catalog.title(entry.name)
+		state.page_items[i] = { name = entry.name, title = title }
+		local column, row = (i - 1) % ITEM_COLUMNS, math.floor((i - 1) / ITEM_COLUMNS)
+		local x, y = 0.5 + column * 2.3, 2.3 + row * 2.5
+		out[#out + 1] = string.format("item_image_button[%g,%g;1.5,1.5;%s;item_%d;]", x + 0.4, y, esc(entry.name), i)
+		out[#out + 1] = string.format("tooltip[item_%d;%s]", i,
+			esc(table.concat({ title, entry.name, S("You hold: @1", entry.count) }, "\n")))
+		out[#out + 1] = string.format("label[%g,%g;%s]", x + 0.1, y + 1.85,
+			esc(shorten(title, 12) .. " x" .. entry.count))
+		out[#out + 1] = money_widget(x + 0.1, y + 2.05, entry.payout)
+	end
+	out[#out + 1] = paging(page, pages)
+	return table.concat(out)
+end
+
 local function trade_screen(name, state)
 	local item = state.item
 	local entry = pricing.get(item)
@@ -228,6 +260,7 @@ end
 
 function ui.formspec(name, state)
 	if state.screen == "trade" then return trade_screen(name, state) end
+	if state.screen == "sell" then return sell_screen(name, state) end
 	if state.screen == "items" then return items_screen(name, state) end
 	return categories_screen(name, state)
 end
@@ -297,9 +330,15 @@ function ui.handle(name, state, fields)
 		end
 	elseif fields.back then
 		if state.screen == "trade" then
-			state.screen = "items"
+			state.screen = state.trade_from or "items"
+		elseif state.screen == "sell" then
+			state.screen, state.page = state.sell_from or "categories", 1
 		elseif state.screen == "items" then
 			state.screen, state.query, state.page = "categories", "", 1
+		end
+	elseif fields.show_sell then
+		if state.screen ~= "trade" and state.screen ~= "sell" then
+			state.sell_from, state.screen, state.page = state.screen, "sell", 1
 		end
 	elseif fields.prev then
 		state.page = (state.page or 1) - 1
@@ -323,6 +362,7 @@ function ui.handle(name, state, fields)
 			index = tonumber(key:match("^item_(%d+)$") or "")
 			local record = index and state.page_items and state.page_items[index]
 			if record then
+				state.trade_from = state.screen
 				state.screen, state.item, state.item_title = "trade", record.name, record.title
 				state.amount, state.message = 1, nil
 				break

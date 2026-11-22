@@ -44,6 +44,29 @@ function T.sellable_count(player_name, item)
 	return total
 end
 
+-- Everything in the player's inventory the shop would accept, one entry per
+-- item: { name, count, payout }, sorted by name. payout is what all of it would
+-- fetch, or nil when that is worth less than the smallest coin.
+function T.sellable_items(player_name)
+	local inv = inventory_of(player_name)
+	if not inv then return {} end
+	local totals, list = {}, {}
+	for _, stack in ipairs(inv:get_list("main")) do
+		if not stack:is_empty() and stack:get_wear() == 0 then
+			local item = collect.resolve(stack:get_name())
+			local entry = pricing.get(item)
+			if entry and not entry.no_sell and not api.is_money(item) and pricing.can_sell(stack) then
+				totals[item] = (totals[item] or 0) + stack:get_count()
+			end
+		end
+	end
+	for item, count in pairs(totals) do
+		list[#list + 1] = { name = item, count = count, payout = (T.quote(item, count, "sell")) }
+	end
+	table.sort(list, function(a, b) return a.name < b.name end)
+	return list
+end
+
 -- The price of `amount` of `item` in the active currency, or nil plus a reason.
 -- mode is "buy" (what the player pays) or "sell" (what the player receives).
 function T.quote(item, amount, mode)
