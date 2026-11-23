@@ -16,6 +16,19 @@ Or use the command: `/sell hand|<itemstring>|<item name> [<amount>|all]`, for ex
 
 Buying and selling are all-or-nothing. If the goods do not fit, or the money cannot be taken, nothing changes. Tools with wear and stacks marked as unsellable are never taken.
 
+## Auction house
+
+Players trade with each other in the auction house: press **Auction** in the shop, or type `/ah`.
+
+- **Sell** puts 1 to 8 stacks up at a fixed price. The price can be money, items (up to 8 stacks, so 8 stacks can buy 8 stacks), or both. The first buyer gets it. If the price is made of currency items (for example one 100 note), a buyer can pay with smaller ones (ten 10 notes) and the owner receives the 100 note.
+- **Bid** starts at a minimum bid. Each new bid has to beat the last by a few percent, up to a buy-out price (5 times the start unless the owner chooses). Bidding is in money only and the goods cannot be money. When the time runs out the highest bidder gets the goods and the owner is paid; if nobody bid, the items go back. A buy-out ends it at once.
+- Owners are paid only when an offer succeeds. Money and items that cannot be delivered (the player is offline, or their inventory is full) wait in the **Claims** tab and are handed over on join or with `/ah claim`.
+- **My offers** shows what you have up and the auctions you lead. Taking an offer down returns the items and pays every bid back. Admins (privilege `server` or `auction_admin`) can take down any offer and receive its items.
+
+Commands: `/ah`, `/ah sell hand|<itemstring>|<item name> [<amount>|all]`, `/ah bid ...` (the same), `/ah claim`, `/ah revoke <number>`. `sell` and `bid` take the items out of your inventory and open the window where you set the price. While that window is open the items are held in it; closing it gives them back.
+
+Settings: `mine_shop_gui_ah_max_offers`, `mine_shop_gui_ah_duration`, `mine_shop_gui_ah_max_hours`, `mine_shop_gui_ah_bid_step`.
+
 ## Currencies
 
 The shop picks one automatically, or you choose in the settings. It works with:
@@ -48,6 +61,10 @@ All settings are in the Luanti settings menu under "Mine ShopGUI".
 | `mine_shop_gui_item_currency` | the items that are the money: `default:steel_ingot`, or `mcl_core:emerald_block=9, mcl_core:emerald=1` (an item with no value is worth 1) |
 | `mine_shop_gui_item_currency_worth` | how many price units one unit of the item currency is worth. Empty uses the shop's own price for the smallest item |
 | `mine_shop_gui_item_currency_label` | the name shown after amounts, for example `Ingots` |
+| `mine_shop_gui_ah_max_offers` | offers one player can have running (10) |
+| `mine_shop_gui_ah_duration` | default length of an offer in hours (24) |
+| `mine_shop_gui_ah_max_hours` | longest an offer may run (168) |
+| `mine_shop_gui_ah_bid_step` | percent a bid must beat the last by (5) |
 
 One price unit is the value of one cobblestone.
 

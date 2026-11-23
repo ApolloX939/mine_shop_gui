@@ -1764,7 +1764,7 @@ if core.get_modpath("formspec_ast") then
 -- Every element the window builder writes must survive parsing: the parser
 -- drops anything malformed, so the counts per element type must agree.
 local ELEMENTS = { "label", "button", "item_image_button", "item_image", "field", "tooltip",
-	"field_close_on_enter", "box", "style" }
+	"field_close_on_enter", "box", "style", "list", "listring", "dropdown" }
 
 local function written(spec)
 	local counts = {}
@@ -2080,3 +2080,662 @@ if rawget(_G, "sbz_api") then
 		callback()
 	end)
 end
+
+---------------------------------------------------------------- auction house
+
+local auction = mine_shop_gui.auction
+local auction_ui = auction.ui
+
+local function stacks(...)
+	local list = {}
+	for i, text in ipairs({ ... }) do list[i] = ItemStack(text) end
+	return list
+end
+
+-- Register a test that starts from an empty auction house, a clock it can move
+-- and a recorder for the messages players would get.
+local function auction_test(title, fn)
+	mtt.register("auction: " .. title, function(callback)
+		use("currency")
+		auction.reset()
+		local clock = os.time()
+		auction.now = function() return clock end
+		local messages = {}
+		local notify, admin = auction.notify, auction.is_admin
+		auction.notify = function(name, text) messages[#messages + 1] = name .. ": " .. text end
+		auction.is_admin = function() return false end
+		local ok, err = xpcall(function()
+			fn(messages, function(seconds) clock = clock + seconds end)
+		end, debug.traceback)
+		auction.notify, auction.is_admin, auction.now = notify, admin, os.time
+		auction.reset()
+		assert(ok, err)
+		callback()
+	end)
+end
+
+local function fill(inv, name, count)
+	inv:set_list("main", {})
+	for i = 1, count do inv:set_stack("main", i, ItemStack(name .. " 99")) end
+end
+
+auction_test("offers are checked before they go up", function()
+	local function refused(spec, expected)
+		local ok, why = auction.create("ah_checker", spec)
+		assert(not ok and why == expected, expected .. " expected, got " .. tostring(why))
+	end
+	refused({ kind = "sell", goods = {}, money = 100 }, "invalid_items")
+	local nine = {}
+	for i = 1, 9 do nine[i] = ItemStack("default:cobble") end
+	refused({ kind = "sell", goods = nine, money = 100 }, "invalid_items")
+	refused({ kind = "sell", goods = stacks("nope:nothing"), money = 100 }, "invalid_items")
+	refused({ kind = "sell", goods = stacks("default:cobble") }, "invalid_price")
+	refused({ kind = "sell", goods = stacks("default:cobble"), money = 3 }, "invalid_price")
+	refused({ kind = "bid", goods = stacks("default:cobble"), start = 0 }, "invalid_price")
+	refused({ kind = "bid", goods = stacks("default:cobble"), start = 100, buyout = 100 }, "invalid_price")
+	-- money is not sold for money, in either kind of offer
+	refused({ kind = "bid", goods = stacks("currency:minegeld"), start = 100 }, "money_goods")
+	refused({ kind = "sell", goods = stacks("currency:minegeld"), money = 100 }, "money_goods")
+	refused({ kind = "sell", goods = stacks("currency:minegeld"), price_items = stacks("currency:minegeld_5") }, "money_goods")
+	assert(auction.count_offers("ah_checker") == 0, "nothing was put up")
+
+	-- a note for items is allowed
+	assert(auction.create("ah_checker", { kind = "sell", goods = stacks("currency:minegeld"),
+		price_items = stacks("default:gold_ingot 2") }))
+
+	-- the currency's own items in the price count as money
+	local ok, offer = auction.create("ah_checker", { kind = "sell", goods = stacks("default:cobble 5"),
+		money = 100, price_items = stacks("currency:minegeld_10 2", "default:gold_ingot 3", "default:gold_ingot 1") })
+	assert(ok, tostring(offer))
+	assert(offer.money == 2100, "100 + two 10-notes: " .. offer.money)
+	assert(#offer.items == 1 and offer.items[1].name == "default:gold_ingot" and offer.items[1].count == 4)
+
+	ok, offer = auction.create("ah_checker", { kind = "bid", goods = stacks("default:cobble"), start = 100 })
+	assert(ok and offer.buyout == 500, "the buy-out is 5 times the start by default")
+
+	local limit = auction.max_offers()
+	core.settings:set("mine_shop_gui_ah_max_offers", "3")
+	refused({ kind = "bid", goods = stacks("default:cobble"), start = 100 }, "too_many_offers")
+	core.settings:remove("mine_shop_gui_ah_max_offers")
+	assert(auction.max_offers() == limit)
+end)
+
+auction_test("parsing what a player types follows the currency", function()
+	assert(api.parse("2.50") == 250 and api.parse("3") == 300 and api.parse(" 0.05 ") == 5)
+	assert(api.parse("abc") == nil and api.parse("") == nil and api.parse("-1") == nil)
+	use("credits")
+	assert(api.parse("12") == 12 and api.parse("1.5") == nil)
+	use("currency")
+end)
+
+auction_test("buying a fixed-price offer pays the owner, even one who is offline", function(messages)
+	with_player("ah_buyer1", function(_, inv)
+		inv:add_item("main", ItemStack("currency:minegeld_10")) -- 1000 cents
+		local ok, offer = auction.create("ah_seller1", { kind = "sell", goods = stacks("default:steel_ingot 5"), money = 600 })
+		assert(ok)
+		local bought, info = auction.buy("ah_buyer1", offer.id)
+		assert(bought, tostring(info))
+		assert(has_stack(inv, "default:steel_ingot 5") and count_value(inv, CENTS) == 400, "change: " .. count_value(inv, CENTS))
+		assert(auction.get(offer.id) == nil, "the offer is gone")
+		assert(auction.pending_count("ah_seller1") == 1, "the owner was offline: the payment waits")
+	end)
+	with_player("ah_seller1", function(_, inv)
+		inv:set_list("main", {})
+		local items, money, left = auction.claim("ah_seller1")
+		assert(items == 0 and money == 600 and left == 0, "claim: " .. money)
+		assert(count_value(inv, CENTS) == 600)
+		assert(auction.pending_count("ah_seller1") == 0)
+	end)
+end)
+
+auction_test("an online owner is paid at once and told", function(messages)
+	with_player("ah_seller2", function(_, sinv)
+		with_player("ah_buyer2", function(_, inv)
+			sinv:set_list("main", {})
+			inv:set_list("main", {})
+			inv:add_item("main", ItemStack("currency:minegeld"))
+			local _, offer = auction.create("ah_seller2", { kind = "sell", goods = stacks("default:cobble 3"), money = 100 })
+			assert(select(2, auction.buy("ah_seller2", offer.id)) == "own_offer")
+			assert(auction.buy("ah_buyer2", offer.id))
+			assert(count_value(sinv, CENTS) == 100 and auction.pending_count("ah_seller2") == 0)
+			assert(messages[#messages]:find("ah_seller2") and messages[#messages]:find("ah_buyer2"))
+			assert(select(2, auction.buy("ah_buyer2", offer.id)) == "not_found", "sold only once")
+		end)
+	end)
+end)
+
+auction_test("ten small notes pay for one big note, and the owner gets the big note", function()
+	with_player("ah_seller3", function(_, sinv)
+		with_player("ah_buyer3", function(_, inv)
+			sinv:set_list("main", {})
+			inv:set_list("main", {})
+			inv:add_item("main", ItemStack("currency:minegeld_10 10")) -- ten 10-notes
+			local ok, offer = auction.create("ah_seller3", { kind = "sell", goods = stacks("default:cobble 3"),
+				price_items = stacks("currency:minegeld_100") })
+			assert(ok and offer.money == 10000 and #offer.items == 0)
+			assert(auction.buy("ah_buyer3", offer.id))
+			assert(count_value(inv, CENTS) == 0 and has_stack(inv, "default:cobble 3"))
+			assert(has_stack(sinv, "currency:minegeld_100") and used_slots(sinv) == 1,
+				"one 100 note, not ten 10 notes")
+		end)
+	end)
+end)
+
+auction_test("an offer priced in items takes exactly those items", function()
+	with_player("ah_seller4", function(_, sinv)
+		with_player("ah_buyer4", function(_, inv)
+			sinv:set_list("main", {})
+			local _, offer = auction.create("ah_seller4", { kind = "sell", goods = stacks("default:diamond 2"),
+				price_items = stacks("default:gold_ingot 3") })
+			inv:set_list("main", {})
+			inv:add_item("main", ItemStack("default:gold_ingot 2"))
+			assert(select(2, auction.buy("ah_buyer4", offer.id)) == "missing_items")
+			-- a worn item does not count
+			inv:set_stack("main", 2, ItemStack({ name = "default:gold_ingot", count = 1, wear = 100 }))
+			assert(select(2, auction.buy("ah_buyer4", offer.id)) == "missing_items")
+			inv:set_stack("main", 2, ItemStack("default:gold_ingot 1"))
+			assert(auction.buy("ah_buyer4", offer.id))
+			assert(has_stack(inv, "default:diamond 2") and not has_stack(inv, "default:gold_ingot"))
+			assert(has_stack(sinv, "default:gold_ingot 3"))
+		end)
+	end)
+end)
+
+auction_test("a purchase that does not fit changes nothing", function()
+	with_player("ah_seller5", function()
+		with_player("ah_buyer5", function(_, inv)
+			local _, offer = auction.create("ah_seller5", { kind = "sell",
+				goods = stacks("default:diamond", "default:steel_ingot"), price_items = stacks("default:gold_ingot") })
+			fill(inv, "default:cobble", 31)
+			inv:set_stack("main", 32, ItemStack("default:gold_ingot"))
+			local before = inv:get_list("main")
+			local ok, why = auction.buy("ah_buyer5", offer.id)
+			assert(not ok and why == "no_room", tostring(why))
+			for i, stack in ipairs(inv:get_list("main")) do
+				assert(stack:to_string() == before[i]:to_string(), "slot " .. i .. " changed")
+			end
+			assert(auction.get(offer.id) and auction.pending_count("ah_seller5") == 0, "the offer stands, nobody paid")
+		end)
+	end)
+end)
+
+auction_test("a buyer who cannot afford it changes nothing", function()
+	with_player("ah_buyer6", function(_, inv)
+		inv:set_list("main", {})
+		inv:add_item("main", ItemStack("currency:minegeld_cent_25"))
+		local _, offer = auction.create("ah_seller6", { kind = "sell", goods = stacks("default:cobble"), money = 100 })
+		local ok, why = auction.buy("ah_buyer6", offer.id)
+		assert(not ok and why == "insufficient_funds", tostring(why))
+		assert(count_value(inv, CENTS) == 25 and auction.get(offer.id))
+	end)
+end)
+
+auction_test("bidding: each bid beats the last, the loser is paid back", function()
+	with_player("ah_bidder_a", function(_, ainv)
+		with_player("ah_bidder_b", function(_, binv)
+			ainv:set_list("main", {})
+			binv:set_list("main", {})
+			ainv:add_item("main", ItemStack("currency:minegeld_5")) -- 500
+			binv:add_item("main", ItemStack("currency:minegeld_5"))
+			local ok, offer = auction.create("ah_owner7", { kind = "bid", goods = stacks("default:diamond 2"), start = 100 })
+			assert(ok and auction.next_bid(offer) == 100)
+
+			assert(select(2, auction.bid("ah_owner7", offer.id)) == "own_offer")
+			assert(select(2, auction.bid("ah_bidder_a", offer.id, 50)) == "bid_too_low")
+			assert(select(2, auction.bid("ah_bidder_a", offer.id, 103)) == "invalid_amount", "not a multiple of the smallest coin")
+			assert(auction.bid("ah_bidder_a", offer.id))
+			assert(count_value(ainv, CENTS) == 400 and offer.bid == 100 and offer.bidder == "ah_bidder_a")
+			assert(auction.next_bid(offer) == 105, "5% of 100 is 5: " .. auction.next_bid(offer))
+			assert(select(2, auction.bid("ah_bidder_a", offer.id)) == "already_leading")
+
+			assert(select(2, auction.bid("ah_bidder_b", offer.id, 100)) == "bid_too_low")
+			assert(auction.bid("ah_bidder_b", offer.id, 120))
+			assert(count_value(binv, CENTS) == 380 and count_value(ainv, CENTS) == 500, "A was paid back")
+			assert(offer.bidder == "ah_bidder_b" and offer.bid == 120)
+			assert(auction.pending_count("ah_owner7") == 0, "the owner is paid only when it ends")
+
+			-- a bid at the buy-out price is a buy-out
+			assert(select(2, auction.bid("ah_bidder_a", offer.id, 505)) == "invalid_amount", "more than the buy-out")
+			local bought = auction.bid("ah_bidder_a", offer.id, 500)
+			assert(bought and has_stack(ainv, "default:diamond 2"), "bought out")
+			assert(count_value(ainv, CENTS) == 0 and count_value(binv, CENTS) == 500, "B paid back")
+			assert(auction.pending_count("ah_owner7") == 1 and auction.get(offer.id) == nil)
+		end)
+	end)
+end)
+
+auction_test("a bid you cannot pay is refused", function()
+	with_player("ah_bidder_c", function(_, inv)
+		inv:set_list("main", {})
+		local _, offer = auction.create("ah_owner8", { kind = "bid", goods = stacks("default:diamond"), start = 100 })
+		local ok, why = auction.bid("ah_bidder_c", offer.id)
+		assert(not ok and why == "insufficient_funds" and offer.bidder == nil)
+	end)
+end)
+
+auction_test("a bidding offer ends: the winner gets the goods, the owner the money", function(_, advance)
+	with_player("ah_bidder_d", function(_, inv)
+		inv:set_list("main", {})
+		inv:add_item("main", ItemStack("currency:minegeld_5"))
+		local _, won = auction.create("ah_owner9", { kind = "bid", goods = stacks("default:diamond 2"), start = 100, hours = 24 })
+		local _, unsold = auction.create("ah_owner9", { kind = "bid", goods = stacks("default:steel_ingot"), start = 100, hours = 12 })
+		assert(auction.bid("ah_bidder_d", won.id))
+
+		advance(13 * 3600)
+		assert(auction.process_expired() == 1 and auction.get(unsold.id) == nil and auction.get(won.id))
+		assert(auction.pending_count("ah_owner9") == 1, "the unsold items wait for their owner")
+
+		advance(12 * 3600)
+		assert(auction.process_expired() == 1)
+		assert(has_stack(inv, "default:diamond 2") and count_value(inv, CENTS) == 400)
+		assert(auction.pending_count("ah_owner9") == 2, "plus the winning bid")
+	end)
+	with_player("ah_owner9", function(_, inv)
+		inv:set_list("main", {})
+		local items, money = auction.claim("ah_owner9")
+		assert(items == 1 and money == 100 and has_stack(inv, "default:steel_ingot"))
+	end)
+end)
+
+auction_test("a fixed-price offer that nobody buys goes back to its owner", function(_, advance)
+	with_player("ah_owner10", function(_, inv)
+		inv:set_list("main", {})
+		local _, offer = auction.create("ah_owner10", { kind = "sell", goods = stacks("default:diamond 3"), money = 500, hours = 6 })
+		assert(#auction.list({ owner = "ah_owner10" }) == 1)
+		advance(7 * 3600)
+		assert(#auction.list({ owner = "ah_owner10" }) == 0, "expired offers are not listed")
+		assert(has_stack(inv, "default:diamond 3") and auction.get(offer.id) == nil)
+	end)
+end)
+
+auction_test("a full inventory leaves deliveries waiting until there is room", function()
+	with_player("ah_owner11", function(_, inv)
+		fill(inv, "default:cobble", 32)
+		auction.create("ah_owner11", { kind = "sell", goods = stacks("default:diamond 3"), money = 500 })
+		local offer = auction.list({ owner = "ah_owner11" })[1]
+		assert(auction.revoke("ah_owner11", offer.id))
+		assert(auction.pending_count("ah_owner11") == 1, "no room: queued")
+		local items, _, left = auction.claim("ah_owner11")
+		assert(items == 0 and left == 1)
+		inv:set_stack("main", 1, ItemStack())
+		items, _, left = auction.claim("ah_owner11")
+		assert(items == 3 and left == 0 and has_stack(inv, "default:diamond 3"))
+	end)
+end)
+
+auction_test("taking an offer down refunds the bid and returns the items", function()
+	with_player("ah_owner12", function(_, oinv)
+		with_player("ah_bidder_e", function(_, binv)
+			oinv:set_list("main", {})
+			binv:set_list("main", {})
+			binv:add_item("main", ItemStack("currency:minegeld_5"))
+			local _, offer = auction.create("ah_owner12", { kind = "bid", goods = stacks("default:diamond 2"), start = 100 })
+			assert(auction.bid("ah_bidder_e", offer.id))
+			assert(count_value(binv, CENTS) == 400)
+
+			assert(select(2, auction.revoke("ah_bidder_e", offer.id)) == "not_allowed", "a stranger cannot")
+			assert(auction.revoke("ah_owner12", offer.id))
+			assert(count_value(binv, CENTS) == 500, "the bid was paid back")
+			assert(has_stack(oinv, "default:diamond 2") and auction.get(offer.id) == nil)
+			assert(auction.pending_count("ah_owner12") == 0, "the owner is paid nothing")
+		end)
+	end)
+end)
+
+auction_test("an admin takes an offer down and receives the items", function()
+	with_player("ah_owner13", function(_, oinv)
+		with_player("ah_admin13", function(_, ainv)
+			with_player("ah_bidder_f", function(_, binv)
+				for _, inv in ipairs({ oinv, ainv, binv }) do inv:set_list("main", {}) end
+				binv:add_item("main", ItemStack("currency:minegeld_5"))
+				local _, offer = auction.create("ah_owner13", { kind = "bid", goods = stacks("default:diamond 2"), start = 100 })
+				assert(auction.bid("ah_bidder_f", offer.id))
+				auction.is_admin = function(name) return name == "ah_admin13" end
+				assert(auction.revoke("ah_admin13", offer.id))
+				assert(has_stack(ainv, "default:diamond 2") and not has_stack(oinv, "default:diamond"))
+				assert(count_value(binv, CENTS) == 500, "the bidder was paid back")
+			end)
+		end)
+	end)
+end)
+
+auction_test("listing: filters and search", function()
+	auction.create("ah_lister", { kind = "sell", goods = stacks("default:steel_ingot 5"), money = 100 })
+	auction.create("ah_lister", { kind = "bid", goods = stacks("default:diamond"), start = 100 })
+	auction.create("ah_other", { kind = "sell", goods = stacks("default:cobble", "default:dirt"), money = 100 })
+	assert(#auction.list() == 3 and #auction.list({ kind = "sell" }) == 2 and #auction.list({ kind = "bid" }) == 1)
+	assert(#auction.list({ owner = "ah_lister" }) == 2)
+	assert(#auction.list({ query = "diamond" }) == 1 and #auction.list({ query = "dirt cobble" }) == 1)
+	assert(#auction.list({ query = "steel ingot" }) == 1 and #auction.list({ query = "ah_other" }) == 1)
+	assert(#auction.list({ query = "nothing like it" }) == 0)
+	assert(auction.list()[1].id > auction.list()[3].id, "newest first")
+end)
+
+---------------------------------------------------------------- auction house: window and command
+
+local function auction_capture()
+	local sent = {}
+	local original = auction_ui.send
+	auction_ui.send = function(name, spec) sent[name] = spec end
+	return sent, function() auction_ui.send = original end
+end
+
+local function auction_click(name, fields)
+	auction_ui.handle(name, auction_ui.state(name), fields)
+end
+
+-- Run fn with the auction window's output captured, always restoring it.
+local function with_auction_window(fn)
+	local sent, restore = auction_capture()
+	local ok, err = xpcall(function() fn(sent) end, debug.traceback)
+	restore()
+	assert(ok, err)
+end
+
+auction_test("window: a sale from the create screen to a purchase", function()
+	with_auction_window(function(sent)
+		with_player("ah_win_seller", function(seller, sinv)
+			with_player("ah_win_buyer", function(_, binv)
+				sinv:set_list("main", {})
+				binv:set_list("main", {})
+				binv:add_item("main", ItemStack("currency:minegeld_5"))
+
+				auction_ui.open_create("ah_win_seller", "sell", stacks("default:steel_ingot 5"))
+				local state = auction_ui.state("ah_win_seller")
+				local inv = assert(auction_ui.create_inventory("ah_win_seller"))
+				assert(state.screen == "create" and inv:get_stack("goods", 1):to_string() == "default:steel_ingot 5")
+				assert(sent.ah_win_seller:find("detached:mine_shop_gui_ah_ah_win_seller", 1, true))
+
+				-- a price slot holds a copy and gives the items back
+				local callbacks = auction_ui.callbacks_for("ah_win_seller")
+				local gold = ItemStack("default:gold_ingot 2")
+				assert(callbacks.allow_put(inv, "price", 1, gold, seller) == 2)
+				inv:set_stack("price", 1, gold)
+				callbacks.on_put(inv, "price", 1, gold, seller)
+				assert(has_stack(sinv, "default:gold_ingot 2"), "the items went back to the player")
+				assert(callbacks.allow_take(inv, "price", 1, gold, seller) == 0, "price slots cannot be emptied by hand")
+				assert(callbacks.allow_put(inv, "price", 1, gold, seller) == 0, "an occupied price slot takes nothing")
+				assert(callbacks.allow_put(inv, "goods", 2, ItemStack("currency:minegeld"), seller) == 1, "money may be sold for items")
+				assert(callbacks.allow_take(inv, "goods", 1, ItemStack("default:steel_ingot 5"), seller) == 5)
+				local stranger = fakelib.create_player({ name = "ah_stranger" })
+				assert(callbacks.allow_put(inv, "goods", 3, ItemStack("default:cobble"), stranger) == 0, "only the owner uses it")
+
+				-- a price that is not a number changes nothing
+				auction_click("ah_win_seller", { price = "lots", publish = "x", hours = "24 h" })
+				assert(state.screen == "create" and not state.message.ok and auction.count_offers("ah_win_seller") == 0)
+				assert(inv:get_stack("goods", 1):to_string() == "default:steel_ingot 5", "the items are still there")
+
+				auction_click("ah_win_seller", { price = "3.00", publish = "x", hours = "48 h" })
+				assert(state.screen == "offer" and state.message.ok, tostring(state.message and state.message.text))
+				local offer = auction.get(state.offer_id)
+				assert(offer and offer.money == 300 and offer.items[1].name == "default:gold_ingot" and offer.items[1].count == 2)
+				assert(offer.expires - offer.created == 48 * 3600)
+				assert(auction_ui.create_inventory("ah_win_seller") == nil, "the create inventory is gone")
+				assert(not has_stack(sinv, "default:steel_ingot"), "the goods are held by the offer")
+
+				-- the buyer finds it
+				auction_ui.open("ah_win_buyer")
+				assert(sent.ah_win_buyer:find("view_1", 1, true) and sent.ah_win_buyer:find("Selling", 1, true))
+				auction_click("ah_win_buyer", { view_1 = "" })
+				local buyer_state = auction_ui.state("ah_win_buyer")
+				assert(buyer_state.screen == "offer" and sent.ah_win_buyer:find("BUY", 1, true))
+				assert(not sent.ah_win_buyer:find("TAKE DOWN", 1, true), "only the owner can take it down")
+
+				auction_click("ah_win_buyer", { buy = "BUY" })
+				assert(not buyer_state.message.ok, "he has no gold")
+				binv:add_item("main", ItemStack("default:gold_ingot 2"))
+				auction_click("ah_win_buyer", { buy = "BUY" })
+				assert(buyer_state.message.ok, buyer_state.message.text)
+				assert(has_stack(binv, "default:steel_ingot 5") and count_value(binv, CENTS) == 200)
+				assert(count_value(sinv, CENTS) == 300 and has_stack(sinv, "default:gold_ingot 4"))
+			end)
+		end)
+	end)
+end)
+
+auction_test("window: closing the create screen gives the items back", function()
+	with_auction_window(function()
+		with_player("ah_win_close", function(player, inv)
+			inv:set_list("main", {})
+			auction_ui.open_create("ah_win_close", "bid", stacks("default:diamond 4"))
+			assert(not has_stack(inv, "default:diamond"))
+			assert(auction_ui.on_fields(player, "mine_shop_gui:auction", { quit = "true" }))
+			assert(has_stack(inv, "default:diamond 4") and auction_ui.create_inventory("ah_win_close") == nil)
+
+			auction_ui.open_create("ah_win_close", "bid", stacks("default:diamond 4"))
+			auction_click("ah_win_close", { tab_browse = "x" })
+			assert(has_stack(inv, "default:diamond 4"), "leaving the screen returns the items too")
+		end)
+	end)
+end)
+
+auction_test("window: a bid offer asks for a start and a buy-out, and refuses money", function()
+	with_auction_window(function()
+		with_player("ah_win_bid", function(player, inv)
+			inv:set_list("main", {})
+			auction_ui.open_create("ah_win_bid", "bid", stacks("currency:minegeld"))
+			local state = auction_ui.state("ah_win_bid")
+			local created = auction_ui.create_inventory("ah_win_bid")
+			local callbacks = auction_ui.callbacks_for("ah_win_bid")
+			assert(callbacks.allow_put(created, "goods", 2, ItemStack("currency:minegeld"), player) == 0, "no money in a bid")
+			assert(callbacks.allow_put(created, "price", 1, ItemStack("default:gold_ingot"), player) == 0, "bids have no price items")
+			auction_click("ah_win_bid", { start = "1.00", buyout = "", publish = "x" })
+			assert(not state.message.ok and state.screen == "create", "money goods are refused when publishing")
+
+			created:set_list("goods", stacks("default:diamond"))
+			auction_click("ah_win_bid", { start = "1.00", buyout = "0.50", publish = "x" })
+			assert(not state.message.ok, "a buy-out under the start is refused")
+			auction_click("ah_win_bid", { start = "1.00", buyout = "3", publish = "x" })
+			assert(state.screen == "offer" and state.message.ok)
+			local offer = auction.get(state.offer_id)
+			assert(offer.kind == "bid" and offer.start == 100 and offer.buyout == 300)
+		end)
+	end)
+end)
+
+auction_test("window: bidding and buying out from the offer screen", function()
+	with_auction_window(function(sent)
+		with_player("ah_win_b1", function(_, inv)
+			inv:set_list("main", {})
+			inv:add_item("main", ItemStack("currency:minegeld_5"))
+			local _, offer = auction.create("ah_win_o", { kind = "bid", goods = stacks("default:diamond"), start = 100 })
+			auction_ui.open("ah_win_b1")
+			auction_click("ah_win_b1", { view_1 = "" })
+			local state = auction_ui.state("ah_win_b1")
+			assert(sent.ah_win_b1:find("BID", 1, true) and sent.ah_win_b1:find("BUY OUT", 1, true))
+			assert(sent.ah_win_b1:find("bid_amount", 1, true))
+
+			auction_click("ah_win_b1", { bid = "BID", bid_amount = "nope" })
+			assert(not state.message.ok and offer.bidder == nil)
+			auction_click("ah_win_b1", { bid = "BID", bid_amount = "1.00" })
+			assert(state.message.ok and offer.bidder == "ah_win_b1" and offer.bid == 100, tostring(state.message.text))
+			auction_click("ah_win_b1", { bid = "BID", bid_amount = "1.05" })
+			assert(not state.message.ok, "already leading")
+			auction_click("ah_win_b1", { buyout = "x" })
+			assert(state.message.ok and has_stack(inv, "default:diamond") and auction.get(offer.id) == nil)
+			assert(count_value(inv, CENTS) == 0, "paid the 5.00 buy-out in all, the bid included: " .. count_value(inv, CENTS))
+		end)
+	end)
+end)
+
+auction_test("window: my offers, claims and taking an offer down", function()
+	with_auction_window(function(sent)
+		with_player("ah_win_m", function(_, inv)
+			inv:set_list("main", {})
+			local _, mine = auction.create("ah_win_m", { kind = "sell", goods = stacks("default:cobble"), money = 100 })
+			auction.create("ah_win_x", { kind = "sell", goods = stacks("default:dirt"), money = 100 })
+			auction_ui.open("ah_win_m", "mine")
+			assert(sent.ah_win_m:find("My offers", 1, true) and sent.ah_win_m:find("(yours)", 1, true))
+			assert(not sent.ah_win_m:find("ah_win_x", 1, true), "only my offers")
+			auction_click("ah_win_m", { view_1 = "" })
+			assert(sent.ah_win_m:find("TAKE DOWN", 1, true))
+			auction_click("ah_win_m", { revoke = "x" })
+			assert(auction.get(mine.id) == nil and has_stack(inv, "default:cobble"))
+			assert(auction_ui.state("ah_win_m").screen == "mine")
+
+			-- a stranger cannot take down somebody else's offer by forging the field
+			local other = auction.list({ owner = "ah_win_x" })[1]
+			auction_ui.state("ah_win_m").screen, auction_ui.state("ah_win_m").offer_id = "offer", other.id
+			auction_click("ah_win_m", { revoke = "x" })
+			assert(auction.get(other.id), "still there")
+
+			auction.create("ah_win_m", { kind = "sell", goods = stacks("default:diamond 2"), money = 100 })
+			fill(inv, "default:cobble", 32)
+			auction.revoke("ah_win_m", auction.list({ owner = "ah_win_m" })[1].id)
+			auction_ui.open("ah_win_m", "claims")
+			assert(sent.ah_win_m:find("Claims (", 1, true) and sent.ah_win_m:find("CLAIM ALL", 1, true))
+			inv:set_list("main", {})
+			auction_click("ah_win_m", { claim = "x" })
+			assert(has_stack(inv, "default:diamond 2") and auction.pending_count("ah_win_m") == 0)
+		end)
+	end)
+end)
+
+auction_test("window: forged fields do nothing", function()
+	with_auction_window(function()
+		with_player("ah_win_f", function(_, inv)
+			inv:set_list("main", {})
+			auction.create("ah_win_o2", { kind = "sell", goods = stacks("default:cobble"), money = 100 })
+			auction_ui.open("ah_win_f")
+			auction_click("ah_win_f", { view_99 = "", buy = "x", revoke = "x", publish = "x", claim = "x", bid = "x" })
+			assert(auction_ui.state("ah_win_f").screen == "browse")
+			auction_click("ah_win_f", { filter_sell = "", query = string.rep("x", 500) })
+			assert(#auction_ui.state("ah_win_f").query == 60)
+			auction_click("ah_win_f", { new_sell = "" })
+			assert(auction_ui.state("ah_win_f").screen == "create")
+			auction_click("ah_win_f", { buy = "x", bid = "x", revoke = "x", claim = "x" })
+			assert(auction_ui.state("ah_win_f").screen == "create" and auction.count_offers("ah_win_o2") == 1)
+		end)
+	end)
+end)
+
+auction_test("window: the shop and the auction house link to each other", function()
+	local shop_sent, shop_restore = capture()
+	local ok, err = pcall(function()
+		with_auction_window(function(sent)
+			with_player("ah_win_link", function()
+				pricing_api.generate()
+				ui.open("ah_win_link")
+				assert(shop_sent.ah_win_link:find("show_auction", 1, true), "the shop has an Auction button")
+				click("ah_win_link", { show_auction = "x" })
+				assert(auction_ui.state("ah_win_link").screen == "browse" and sent.ah_win_link:find("Auction House", 1, true))
+				auction_click("ah_win_link", { to_shop = "x" })
+				assert(auction_ui.state("ah_win_link") == nil and ui.state("ah_win_link").screen == "categories")
+			end)
+		end)
+	end)
+	shop_restore()
+	assert(ok, err)
+end)
+
+auction_test("command: /ah sell and /ah bid take the items and open the window", function()
+	with_auction_window(function()
+		with_player("ah_cmd", function(player, inv)
+			local run = auction.command.run
+			inv:set_list("main", {})
+			-- the hand is the first slot: keep the other items out of it
+			inv:set_stack("main", 5, ItemStack("default:steel_ingot 30"))
+			inv:set_stack("main", 6, ItemStack("default:diamond 3"))
+
+			assert(run("ah_cmd", ""))
+			assert(auction_ui.state("ah_cmd").screen == "browse")
+
+			player:set_wielded_item(ItemStack("default:cobble 7"))
+			assert(run("ah_cmd", "sell hand"))
+			local created = auction_ui.create_inventory("ah_cmd")
+			assert(auction_ui.state("ah_cmd").kind == "sell" and created:get_stack("goods", 1):to_string() == "default:cobble 7")
+			assert(player:get_wielded_item():is_empty(), "the stack left the hand")
+
+			assert(run("ah_cmd", "bid default:diamond 2"))
+			assert(auction_ui.state("ah_cmd").kind == "bid")
+			assert(auction_ui.create_inventory("ah_cmd"):get_stack("goods", 1):to_string() == "default:diamond 2")
+			assert(has_stack(inv, "default:diamond 1") and not has_stack(inv, "default:diamond 2"), "one diamond is left")
+
+			assert(run("ah_cmd", "sell Steel Ingot all"))
+			assert(auction_ui.create_inventory("ah_cmd"):get_stack("goods", 1):to_string() == "default:steel_ingot 30")
+			assert(not has_stack(inv, "default:steel_ingot"))
+
+			local done, message = run("ah_cmd", "sell Unobtainium")
+			assert(done == false and message:find("nothing that matches", 1, true), tostring(message))
+			done, message = run("ah_cmd", "sell nope:nothing")
+			assert(done == false and message:find("Unknown item", 1, true))
+			done = run("ah_cmd", "sell default:cobble 0")
+			assert(done == false)
+			player:set_wielded_item(ItemStack())
+			done, message = run("ah_cmd", "sell hand")
+			assert(done == false and message:find("not holding", 1, true))
+			done, message = run("ah_cmd", "frobnicate")
+			assert(done == false and message:find("Usage", 1, true))
+
+			-- the window held the steel; closing hands it back
+			assert(auction_ui.on_fields(player, "mine_shop_gui:auction", { quit = "true" }))
+			assert(has_stack(inv, "default:steel_ingot 30"))
+
+			local ok2, result = run("ah_cmd", "claim")
+			assert(ok2 == true and result:find("Nothing"), tostring(result))
+		end)
+	end)
+end)
+
+auction_test("command: /ah revoke", function()
+	with_player("ah_cmd2", function(_, inv)
+		inv:set_list("main", {})
+		local _, offer = auction.create("ah_cmd2", { kind = "sell", goods = stacks("default:cobble 2"), money = 100 })
+		local run = auction.command.run
+		assert(run("ah_cmd2", "revoke") == false)
+		assert(run("ah_cmd2", "revoke 99999") == false)
+		assert(run("ah_cmd2", "revoke " .. offer.id) == true and has_stack(inv, "default:cobble 2"))
+	end)
+end)
+
+auction_test("window: formspec syntax of every screen", function()
+	if not check_syntax then return end
+	with_auction_window(function(sent)
+		with_player("ah_syn", function(_, inv)
+			inv:set_stack("main", 1, ItemStack("default:steel_ingot 5"))
+			auction.create("ah_syn_o", { kind = "sell", goods = stacks("default:cobble 3", "default:dirt"),
+				money = 250, price_items = stacks("default:gold_ingot 2") })
+			auction.create("ah_syn_o", { kind = "bid", goods = stacks("default:diamond"), start = 100 })
+			for _ = 1, 6 do auction.create("ah_syn_o", { kind = "sell", goods = stacks("default:cobble"), money = 100 }) end
+			auction.create("ah_syn", { kind = "sell", goods = stacks("default:cobble 3"), money = 100 })
+
+			auction_ui.open("ah_syn")
+			check_syntax(sent.ah_syn, "auction browse")
+			auction_click("ah_syn", { next = "x" })
+			check_syntax(sent.ah_syn, "auction browse, page 2")
+			auction_click("ah_syn", { filter_bid = "x" })
+			check_syntax(sent.ah_syn, "auction browse, bids")
+			auction_click("ah_syn", { query = "no such thing", do_search = "x" })
+			check_syntax(sent.ah_syn, "auction browse, nothing found")
+			auction_click("ah_syn", { tab_mine = "x" })
+			check_syntax(sent.ah_syn, "auction my offers")
+			auction_click("ah_syn", { tab_claims = "x" })
+			check_syntax(sent.ah_syn, "auction claims, empty")
+
+			auction_ui.open("ah_syn")
+			auction_click("ah_syn", { filter_sell = "x" })
+			auction_click("ah_syn", { view_1 = "x" })
+			check_syntax(sent.ah_syn, "auction sell offer")
+			auction_ui.open("ah_syn")
+			auction_click("ah_syn", { filter_bid = "x" })
+			auction_click("ah_syn", { view_1 = "x" })
+			check_syntax(sent.ah_syn, "auction bid offer")
+			auction_ui.state("ah_syn").message = { ok = false, text = "a message, with [brackets]; and commas" }
+			auction_ui.show("ah_syn")
+			check_syntax(sent.ah_syn, "auction offer with a message")
+
+			auction_click("ah_syn", { new_sell = "x" })
+			check_syntax(sent.ah_syn, "auction create sale")
+			auction_click("ah_syn", { new_bid = "x" })
+			check_syntax(sent.ah_syn, "auction create bid")
+			auction_ui.open("ah_syn")
+
+			-- deliveries that wait
+			auction.create("ah_syn", { kind = "sell", goods = stacks("default:diamond"), money = 100 })
+			fill(inv, "default:cobble", 32)
+			for _, offer in ipairs(auction.list({ owner = "ah_syn" })) do auction.revoke("ah_syn", offer.id) end
+			auction_ui.open("ah_syn", "claims")
+			check_syntax(sent.ah_syn, "auction claims")
+		end)
+	end)
+end)

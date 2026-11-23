@@ -306,3 +306,25 @@ The owner set `mine_shop_gui_item_currency = default:steel_ingot` with `mine_sho
 
 - Anchors for the natural items listed above, and prices for Ethereal, Everness, Techage and other content mods.
 - The shop GUI itself.
+
+## Auction house (`src/auction/`)
+
+Asked for by the owner: an Auction button in the shop window and `/ah`, with fixed-price sales and bidding.
+
+Design (all decided while building; change them here if the owner disagrees):
+- **Two kinds of offer**, both holding 1 to 8 stacks (whole `ItemStack`s, so wear and metadata survive).
+  - `sell`: fixed price. The price is money, items, or both (up to 8 item stacks, so 8 stacks can buy 8 stacks). The first buyer takes it.
+  - `bid`: a starting bid and a buy-out price (default 5 times the start). Money only. Each bid must beat the last by `mine_shop_gui_ah_bid_step` percent (default 5, never less than the smallest coin); a bid at the buy-out price is a buy-out. The highest bidder wins at the end and gets the goods; the owner is paid then. The goods of a bidding offer cannot be money (`money_goods`).
+- **Money in the price is paid through the currency.** Stacks of the currency's own items in a sell price are summed into a money amount (`api.stack_value`), so ten 10-notes pay for one 100-note and the owner receives the 100-note (the denominations adapter takes all the buyer's money and hands back change, and pays out greedily). Other items in the price are taken from the buyer exactly (undamaged stacks only). A sell offer may sell money for items, but not for money.
+- **Escrow.** The goods leave the owner when the offer is published. A bid's money leaves the bidder at once and is paid back when they are outbid or the offer is taken down. A buy-out by the highest bidder only charges the difference. Every purchase and buy-out is atomic: money, items and goods are snapshotted and put back if anything fails.
+- **Owners and bidders who are offline.** Anything that cannot be handed over now (player offline, inventory full, deposit failed) goes into a per-player queue kept in mod storage. It is delivered on join (after 3 s), with `/ah claim`, or from the Claims tab. Money in the queue remembers its currency and waits if the currency changes. Offers made in another currency are hidden and not expired until that currency is active again.
+- **Time.** Offers last 1 to 168 hours (setting `mine_shop_gui_ah_max_hours`, default length `mine_shop_gui_ah_duration` 24) and use wall-clock time (`os.time`), so they run on while the server is off. A 30-second timer and every listing close expired offers: unsold items go back to the owner, a won auction pays out. `mine_shop_gui_ah_max_offers` (default 10) limits offers per player.
+- **Taking an offer down.** The owner can at any time: bids are paid back, goods return. An admin (privilege `server` or the new `auction_admin`) can take down any offer; the goods go to the admin, not the owner, who is told. `/ah revoke <number>` does the same by command.
+- **Persistence.** One serialized table in mod storage (`auction`): offers, next id and the queues. Saved after every change. Goods held in the create window live only in a detached inventory; they are returned when the window closes, the player navigates away or leaves, but a server crash while the window is open would lose them.
+- **Amounts typed by players** go through `api.parse`: whole numbers, except Minegeld where `1.25` means 1.25 (an adapter can supply `parse`).
+
+Window (`ui.lua`): tabs Browse (filters All/Selling/Bidding, search, 5 rows a page), My offers (own offers and auctions you lead), Claims, New sale, New bid, and a way back to the shop. The create screen uses a detached inventory: goods slots take the items from the player's inventory; price slots (sell only) are copies, the items go straight back and "Clear price items" empties them. Offers are named by their position on the page, so forged fields cannot reach an offer the page did not show.
+
+Command (`command.lua`): `/ah`, `/ah sell|bid hand|<itemstring>|<item name> [<amount>|all]` (takes the items out of the inventory and opens the create window; `hand` takes the stack in hand, anything else one item unless told), `/ah claim`, `/ah revoke <number>`.
+
+Tested in the real engine (`auction:` tests in `mtt.lua`): validation, buying with money/items/Minegeld notes, change, offline owners, no-room and no-funds changing nothing, bidding, outbid refunds, buy-out, expiry both ways, revoke by owner and admin, listing and search, the window end to end, forged fields, the command, and formspec syntax. Not tested: the appearance in a real client, the `credits` and `cookies` adapters' `stack_value`, a server restart with offers in storage.

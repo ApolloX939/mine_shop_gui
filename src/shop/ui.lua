@@ -97,12 +97,14 @@ local function paging(page, pages)
 	})
 end
 
+-- The search box sits at x and is `width` wide; the buttons beside it are fixed.
 local function search_bar(state, x, width)
 	return table.concat({
 		input_field(x, 1.2, width, 0.8, "query", state.query),
 		"field_close_on_enter[query;false]",
-		string.format("button[%g,1.2;2.2,0.8;do_search;%s]", x + width + 0.2, esc(S("Search"))),
-		string.format("button[13.1,1.2;1.4,0.8;show_sell;%s]", esc(S("Sell"))),
+		string.format("button[9.1,1.2;1.8,0.8;do_search;%s]", esc(S("Search"))),
+		string.format("button[11.1,1.2;1.4,0.8;show_sell;%s]", esc(S("Sell"))),
+		string.format("button[12.7,1.2;1.8,0.8;show_auction;%s]", esc(S("Auction"))),
 	})
 end
 
@@ -128,7 +130,7 @@ local function categories_screen(name, state)
 	local slice, page, pages = catalog.page(catalog.categories(), state.page, CATEGORY_COLUMNS * CATEGORY_ROWS)
 	state.page, state.page_categories = page, {}
 
-	local out = { header(name, S("Shop")), search_bar(state, 0.5, 10) }
+	local out = { header(name, S("Shop")), search_bar(state, 0.5, 8.4) }
 	for i, category in ipairs(slice) do
 		state.page_categories[i] = category.id
 		local column, row = (i - 1) % CATEGORY_COLUMNS, math.floor((i - 1) / CATEGORY_COLUMNS)
@@ -151,7 +153,7 @@ local function items_screen(name, state)
 	local out = {
 		header(name, category and category.title or S("Shop")),
 		string.format("button[0.5,1.2;2,0.8;back;%s]", esc(S("< Back"))),
-		search_bar(state, 2.7, 7.5),
+		search_bar(state, 2.7, 6.2),
 	}
 	if #list == 0 then
 		out[#out + 1] = "label[0.5,3;" .. esc(S("Nothing found.")) .. "]"
@@ -336,6 +338,12 @@ function ui.handle(name, state, fields)
 		elseif state.screen == "items" then
 			state.screen, state.query, state.page = "categories", "", 1
 		end
+	elseif fields.show_auction then
+		local auction = mine_shop_gui.auction and mine_shop_gui.auction.ui
+		if auction and state.screen ~= "trade" and state.screen ~= "sell" then
+			auction.open(name)
+			return
+		end
 	elseif fields.show_sell then
 		if state.screen ~= "trade" and state.screen ~= "sell" then
 			state.sell_from, state.screen, state.page = state.screen, "sell", 1
@@ -404,5 +412,8 @@ core.register_chatcommand("shop", {
 		return true
 	end,
 })
+
+-- Pieces the auction window draws the same way.
+ui.widgets = { money_widget = money_widget, input_field = input_field, shorten = shorten, money = money }
 
 mine_shop_gui.shop.ui = ui

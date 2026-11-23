@@ -39,6 +39,11 @@ load("src/shop/catalog")
 load("src/shop/ui")
 load("src/shop/sell_command")
 
+-- The auction house: offers, bids, expiry, and the /ah command.
+load("src/auction/auction")
+load("src/auction/ui")
+load("src/auction/command")
+
 -- Integration tests, only when the mtt test framework is enabled.
 if core.get_modpath("mtt") and mtt and mtt.enabled then
 	load("mtt")

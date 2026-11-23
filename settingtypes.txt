@@ -21,6 +21,20 @@ mine_shop_gui_scale_credits (Scale: credits) float 1 0.0001
 # The most items a player can buy in one go.
 mine_shop_gui_max_amount (Largest purchase) int 1000 1 65535
 
+[Auction house]
+
+# The most offers one player can have running at the same time.
+mine_shop_gui_ah_max_offers (Offers per player) int 10 1 1000
+
+# How long a new offer runs by default, in hours.
+mine_shop_gui_ah_duration (Default offer length, hours) int 24 1 168
+
+# The longest an offer may run, in hours. Players choose from 1, 6, 12, 24, 48, 72 and 168 up to this.
+mine_shop_gui_ah_max_hours (Longest offer, hours) int 168 1 168
+
+# How much more than the last bid a new bid must be, in percent (never less than the smallest coin).
+mine_shop_gui_ah_bid_step (Bid step, %) float 5 0 100
+
 [Pricing]
 
 # Percentage added to the cost of items made with each recipe type.

@@ -36,6 +36,11 @@ function adapter.is_money(item)
 	return item == ITEM
 end
 
+function adapter.stack_value(stack)
+	if stack:get_name() ~= ITEM then return nil end
+	return stack:get_count()
+end
+
 local function get_inventory(player)
 	local obj = core.get_player_by_name(player)
 	return obj and obj:get_inventory()

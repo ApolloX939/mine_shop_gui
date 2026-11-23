@@ -21,6 +21,11 @@
 --   format_symbol(amount)   the amount with a short currency mark, for text ("$1.25")
 --   icon()                  an item that stands for the currency, or nil
 --   unit()                  smallest amount the adapter can pay (a whole number)
+--   is_money(item)          optional: is this item one of the currency's own items?
+--   stack_value(stack)      optional: what an ItemStack of the currency's own items is
+--                           worth, or nil if the stack is not money
+--   parse(text)             optional: turn what a player typed into an amount
+--                           (default: a whole number); nil if it is not a number
 --   default_scale           currency amount per price unit; overridden by the
 --                           `mine_shop_gui_scale_<name>` setting
 --
@@ -134,6 +139,30 @@ end
 function api.is_money(item)
 	local adapter = api.active
 	return adapter ~= nil and adapter.is_money ~= nil and adapter.is_money(item) or false
+end
+
+-- What an ItemStack is worth as money, or nil if it is not one of the active
+-- currency's own items (or the currency has no items).
+function api.stack_value(stack)
+	local adapter = api.active
+	if not adapter or not adapter.stack_value or stack:is_empty() then return nil end
+	return adapter.stack_value(stack)
+end
+
+-- An amount as a player types it. Returns a whole number in the smallest unit,
+-- or nil if the text is not a usable number.
+function api.parse(text)
+	local adapter = api.active
+	text = tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if not adapter or text == "" then return nil end
+	local amount
+	if adapter.parse then
+		amount = adapter.parse(text)
+	elseif text:match("^%d+$") then
+		amount = tonumber(text)
+	end
+	if amount and api.valid_amount(amount) then return amount end
+	return nil
 end
 
 local function sell_ratio()

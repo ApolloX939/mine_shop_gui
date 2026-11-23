@@ -66,6 +66,11 @@ function adapter.is_money(item)
 	return item == "credits:credits" or item == "credits:credits_mkii" or item == "credits:credits_mkiii"
 end
 
+function adapter.stack_value(stack)
+	if not adapter.is_money(stack:get_name()) then return nil end
+	return stack_value(stack, is_valued())
+end
+
 function adapter.snapshot(player)
 	local inv = get_inventory(player)
 	if not inv then return nil end

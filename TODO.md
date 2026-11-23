@@ -18,6 +18,9 @@ All answered; see `PLAN.md`.
 - [ ] A placeable shop block as an alternative to `/shop`.
 - [ ] A privilege or setting to control who may use the shop, and a way to close it.
 - [ ] A log of trades for the owner.
+- [ ] Try the auction house (`/ah`) in a real client and tell me what looks wrong (the create window with its inventory lists especially).
+- [ ] Auction house: tests for the `credits` and `cookies` `stack_value`, and for offers surviving a server restart.
+- [ ] Auction house: a listing fee or tax (money sink), anti-sniping (extend a bid near the end), and a log for admins.
 
 - [ ] Version 2: price inference is written up in `PLAN_V2.md` for consideration. Not scheduled.
 

@@ -10,7 +10,9 @@
 --                                                  (default: the smallest denomination)
 --   symbol = "$", symbol_first = true,             -- optional: short mark for text
 --   number = function(amount) return "..." end,   -- optional: amount without any currency name
---   warn_missing = true,                           -- optional: log denominations whose item is not registered
+--   parse = function(text) return amount end,    -- optional: what a player typed -> amount
+--   parse = function(text) return amount end,     -- optional: what a player typed -> amount
+--   warn_missing = true,                          -- optional: log denominations whose item is not registered
 -- }
 --
 -- Paying works by removing all of the player's money, then handing back the
@@ -132,6 +134,14 @@ function M.new(def)
 	function self.is_money(item)
 		return resolved().values[item] ~= nil
 	end
+
+	-- What a stack of the currency's own items is worth, or nil.
+	function self.stack_value(stack)
+		local value = resolved().values[stack:get_name()]
+		return value and value * stack:get_count() or nil
+	end
+
+	self.parse = def.parse
 
 	function self.snapshot(player)
 		local inv = get_inventory(player)

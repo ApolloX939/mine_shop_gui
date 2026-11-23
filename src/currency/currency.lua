@@ -21,6 +21,11 @@ local adapter = mine_shop_gui.currency_denominations.new({
 	format = function(cents)
 		return string.format("%d.%02d", math.floor(cents / 100), cents % 100)
 	end,
+	-- players type dollars ("1.25"), amounts are cents
+	parse = function(text)
+		local dollars = text:match("^%d+%.?%d?%d?$")
+		return dollars and math.floor(tonumber(dollars) * 100 + 0.5) or nil
+	end,
 	icon = "currency:minegeld", -- the 1.00 note
 	symbol = "$", symbol_first = true,
 })
