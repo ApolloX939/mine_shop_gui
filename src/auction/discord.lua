@@ -28,7 +28,7 @@ local A = mine_shop_gui.auction
 
 local D = {}
 
-local http = core.request_http_api and core.request_http_api()
+local http = mine_shop_gui.http -- requested in init.lua (the API is only granted there)
 
 -- Replaced by tests.
 function D.can_send()

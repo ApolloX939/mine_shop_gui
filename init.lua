@@ -5,6 +5,11 @@ mine_shop_gui = {
 }
 mine_shop_gui.modpath = core.get_modpath(mine_shop_gui.modname)
 
+-- Luanti only hands out the HTTP API to a call made directly from this file's main chunk
+-- (not from a dofile'd file), so ask for it here; the Discord posting reads it from here.
+-- It stays nil unless the mod is listed in secure.http_mods.
+mine_shop_gui.http = core.request_http_api and core.request_http_api()
+
 local function load(path)
 	dofile(mine_shop_gui.modpath .. "/" .. path .. ".lua")
 end
