@@ -40,6 +40,18 @@ For an ordinary **text** channel that should still get one thread per offer, als
 
 Settings: `mine_shop_gui_ah_max_offers`, `mine_shop_gui_ah_duration`, `mine_shop_gui_ah_max_hours`, `mine_shop_gui_ah_bid_step`.
 
+## Trading with a player
+
+`/trade <player>` asks someone to trade; they type `/trade accept` (or `/trade <your name>` back) and a window opens for both. Needs the `shout` and `interact` privileges, for both players, and nothing else: there is no item, stack or money limit other than what each player has.
+
+- Drag items from your inventory into **You offer**. The offer list is as big as your inventory. The other player's offer is shown next to it.
+- If a currency is in use, type an amount in **Your money** and press **Set** (or Enter). Money moves through the currency API, so it works with every supported currency (a payment may be made of any notes or coins, and the receiver gets the larger ones).
+- Press **Lock offer** when you agree. When both players have locked, everything changes hands at once. Any change by either side (an item moved, the money changed) removes both locks, so nothing can be swapped after the other side agreed.
+- If the trade cannot finish (somebody has no room, or no longer has the money they offered) nothing changes and the window stays open.
+- **Cancel trade**, closing the window, leaving, dying or a server shutdown ends the trade and everybody gets their items back. The items on offer stay in your own inventory (in an extra list that is saved with you), so even a crash loses nothing: they go back to your inventory when you join again.
+
+Commands: `/trade <player>`, `/trade accept [player]`, `/trade decline [player]`, `/trade cancel`. A request runs out after a minute. The window uses list sizing styles that need Luanti 5.8 or newer on the player's side.
+
 ## Currencies
 
 The shop picks one automatically, or you choose in the settings. It works with:

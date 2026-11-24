@@ -50,6 +50,11 @@ load("src/auction/ui")
 load("src/auction/command")
 load("src/auction/discord")
 
+-- Player to player trading: the /trade command and its window.
+load("src/trade/trade")
+load("src/trade/ui")
+load("src/trade/command")
+
 -- Integration tests, only when the mtt test framework is enabled.
 if core.get_modpath("mtt") and mtt and mtt.enabled then
 	load("mtt")

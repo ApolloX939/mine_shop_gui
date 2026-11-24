@@ -20,6 +20,8 @@ All answered; see `PLAN.md`.
 - [ ] A log of trades for the owner.
 - [ ] Try the auction house (`/ah`) in a real client and tell me what looks wrong (the create window with its inventory lists especially).
 - [ ] Auction house: tests for the `credits` and `cookies` `stack_value`, and for offers surviving a server restart.
+- [ ] Try `/trade` in a real client and tell me what looks wrong (the two offer lists, sizes and spacing; the list size styles need a Luanti 5.8+ client).
+- [ ] Trade: a log of completed trades for admins, and a setting to turn it off.
 - [ ] Auction house: a listing fee or tax (money sink), anti-sniping (extend a bid near the end), and a log for admins.
 
 - [ ] Version 2: price inference is written up in `PLAN_V2.md` for consideration. Not scheduled.

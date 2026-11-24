@@ -2960,3 +2960,331 @@ auction_test("discord: emoji decorate the posts, can be replaced or turned off",
 		assert(discord.final_status("expired", offer, {}) == "EXPIRED: nobody bought it")
 	end)
 end)
+
+---------------------------------------------------------------- trade
+
+local trade = mine_shop_gui.trade
+local trade_ui = trade.ui
+local LIST = trade.LIST
+
+-- Register a test that starts without trades, with a clock it can move, players
+-- that are allowed to trade, and the window output captured.
+local function trade_test(title, fn)
+	mtt.register("trade: " .. title, function(callback)
+		use("currency")
+		trade.reset()
+		local clock = os.time()
+		trade.now = function() return clock end
+		local messages = {}
+		local notify, allowed, send, close = trade.notify, trade.allowed, trade_ui.send, trade_ui.close
+		trade.notify = function(name, text) messages[#messages + 1] = name .. ": " .. text end
+		trade.allowed = function(name) return name ~= "tr_nopriv" end
+		local sent = {}
+		trade_ui.send = function(name, spec) sent[name] = spec end
+		trade_ui.close = function() end
+		local ok, err = xpcall(function()
+			fn(messages, sent, function(seconds) clock = clock + seconds end)
+		end, debug.traceback)
+		trade.reset()
+		trade.notify, trade.allowed, trade.now = notify, allowed, os.time
+		trade_ui.send, trade_ui.close = send, close
+		assert(ok, err)
+		callback()
+	end)
+end
+
+-- Two fake players with empty inventories.
+local function with_pair(a, b, fn)
+	with_player(a, function(pa, ia)
+		with_player(b, function(pb, ib)
+			ia:set_list("main", {})
+			ib:set_list("main", {})
+			fn(pa, ia, pb, ib)
+		end)
+	end)
+end
+
+-- Put a stack on the table the way a player drags it: out of main, into the
+-- trade list, and tell the trade.
+local function put(name, inv, text, slot)
+	local stack = ItemStack(text)
+	local left = inv:remove_item("main", stack)
+	assert(left:get_count() == stack:get_count(), "the player does not have " .. text)
+	inv:set_stack(LIST, slot or 1, stack)
+	trade.on_action(core.get_player_by_name(name), "move", inv, { from_list = "main", to_list = LIST })
+end
+
+local function trade_started(a, b)
+	assert(trade.request(a, b))
+	local ok, result = trade.request(b, a)
+	assert(ok and result == "started", tostring(result))
+end
+
+trade_test("a request must be answered, and not by the wrong people", function(_, _, tick)
+	with_pair("tr_a", "tr_b", function()
+		local function refused(from, to, expected)
+			local ok, why = trade.request(from, to)
+			assert(not ok and why == expected, expected .. " expected, got " .. tostring(why))
+		end
+		refused("tr_a", "tr_a", "self")
+		refused("tr_a", "tr_nobody", "offline")
+		local ok, result = trade.request("tr_a", "tr_b")
+		assert(ok and result == "sent" and not trade.get("tr_a"), "a request is only a request")
+		assert(trade.incoming("tr_b")[1] == "tr_a")
+
+		-- it runs out
+		tick(trade.REQUEST_SECONDS + 1)
+		assert(#trade.incoming("tr_b") == 0)
+		local ok2, why = trade.accept("tr_b")
+		assert(not ok2 and why == "not_found")
+
+		-- accepting starts it, and both are busy now
+		trade.request("tr_a", "tr_b")
+		local ok3, result3 = trade.accept("tr_b")
+		assert(ok3 and result3 == "started" and trade.get("tr_a") == trade.get("tr_b"))
+		refused("tr_a", "tr_b", "busy")
+		refused("tr_b", "tr_a", "busy")
+	end)
+end)
+
+trade_test("a player without the privileges cannot be asked", function()
+	with_pair("tr_a", "tr_nopriv", function()
+		local ok, why = trade.request("tr_a", "tr_nopriv")
+		assert(not ok and why == "not_allowed")
+	end)
+end)
+
+trade_test("asking each other starts it, and declining ends the request", function(messages)
+	with_pair("tr_a", "tr_b", function()
+		trade.request("tr_a", "tr_b")
+		assert(trade.decline("tr_b"))
+		assert(#trade.incoming("tr_b") == 0)
+		assert(messages[#messages]:find("declined", 1, true), messages[#messages])
+		trade_started("tr_a", "tr_b")
+		assert(trade.get("tr_a"), "the second request accepted the first")
+		-- the list is as big as the main list
+		assert(core.get_player_by_name("tr_a"):get_inventory():get_size(LIST) == 32)
+	end)
+end)
+
+trade_test("items and money change hands only when both lock", function()
+	with_pair("tr_a", "tr_b", function(_, ia, _, ib)
+		ia:add_item("main", ItemStack("default:steel_ingot 40"))
+		ia:add_item("main", ItemStack("default:pick_steel"))
+		ia:add_item("main", ItemStack("currency:minegeld_10"))
+		ib:add_item("main", ItemStack("default:gold_ingot 7"))
+		ib:add_item("main", ItemStack("currency:minegeld_50"))
+		local before_a, before_b = api.balance("tr_a"), api.balance("tr_b")
+		trade_started("tr_a", "tr_b")
+
+		put("tr_a", ia, "default:steel_ingot 40", 1)
+		put("tr_a", ia, "default:pick_steel", 2)
+		put("tr_b", ib, "default:gold_ingot 7", 1)
+		assert(trade.set_money("tr_b", 2000))
+		assert(#trade.offer("tr_a") == 2 and trade.offer("tr_b")[1]:get_count() == 7)
+		assert(trade.money("tr_b") == 2000)
+
+		-- the partner sees it
+		local mirror = core.get_inventory({ type = "detached", name = trade.mirror_name("tr_a") })
+		assert(mirror:get_stack("offer", 1):to_string() == "default:steel_ingot 40")
+
+		local ok, result = trade.lock("tr_a")
+		assert(ok and result == "locked" and trade.is_locked("tr_a"))
+		assert(trade.get("tr_a"), "one lock is not enough")
+		assert(ia:get_stack(LIST, 1):get_count() == 40, "nothing moved yet")
+
+		local ok2, result2 = trade.lock("tr_b")
+		assert(ok2 and result2 == "completed", tostring(result2))
+		assert(not trade.get("tr_a") and not trade.get("tr_b"))
+		assert(ib:contains_item("main", ItemStack("default:steel_ingot 40")))
+		assert(ib:contains_item("main", ItemStack("default:pick_steel")))
+		assert(ia:contains_item("main", ItemStack("default:gold_ingot 7")))
+		assert(not ia:contains_item("main", ItemStack("default:steel_ingot")))
+		assert(ia:get_size(LIST) == 0 and ib:get_size(LIST) == 0, "the lists are gone")
+		assert(api.balance("tr_a") == before_a + 2000, "a was paid 20 of the 50 note")
+		assert(api.balance("tr_b") == before_b - 2000)
+		assert(not core.get_inventory({ type = "detached", name = trade.mirror_name("tr_a") }), "the mirror is gone")
+	end)
+end)
+
+trade_test("any change takes the locks away, and a lock freezes your own side", function()
+	with_pair("tr_a", "tr_b", function(pa, ia, _, ib)
+		ia:add_item("main", ItemStack("default:cobble 10"))
+		ib:add_item("main", ItemStack("default:dirt 10"))
+		trade_started("tr_a", "tr_b")
+		put("tr_a", ia, "default:cobble 5", 1)
+		trade.lock("tr_a")
+		assert(trade.is_locked("tr_a"))
+
+		-- the partner changes their side: A is no longer locked
+		put("tr_b", ib, "default:dirt 1", 1)
+		assert(not trade.is_locked("tr_a"), "the lock went with the change")
+		assert(trade.money("tr_a") == 0)
+
+		-- a locked side cannot be changed by moving items
+		trade.lock("tr_a")
+		local info = { from_list = "main", from_index = 1, to_list = LIST, to_index = 2, count = 1 }
+		assert(trade.allow_action(pa, "move", ia, info) == 0, "locked: no changes")
+		assert(trade.set_money("tr_a", 100) == false)
+		trade.unlock("tr_a")
+		assert(trade.allow_action(pa, "move", ia, info) == nil, "unlocked: allowed")
+
+		-- other moves in the inventory are not the trade's business
+		assert(trade.allow_action(pa, "move", ia, { from_list = "main", to_list = "craft" }) == nil)
+		-- and the trade list is shut when there is no trade
+		trade.cancel("tr_a")
+		assert(trade.allow_action(pa, "move", ia, info) == 0)
+	end)
+end)
+
+trade_test("money: only what you have, in amounts the currency can pay", function()
+	with_pair("tr_a", "tr_b", function(_, ia)
+		ia:add_item("main", ItemStack("currency:minegeld_5"))
+		trade_started("tr_a", "tr_b")
+		local function refused(amount, expected)
+			local ok, why = trade.set_money("tr_a", amount)
+			assert(not ok and why == expected, expected .. " expected, got " .. tostring(why))
+		end
+		refused(100000, "insufficient_funds")
+		refused(-5, "invalid_amount")
+		refused(3, "invalid_amount")
+		refused(0.5, "invalid_amount")
+		assert(trade.set_money("tr_a", 500) and trade.money("tr_a") == 500)
+		assert(trade.set_money("tr_a", 0) and trade.money("tr_a") == 0)
+	end)
+end)
+
+trade_test("a trade that cannot finish changes nothing", function(messages)
+	with_pair("tr_a", "tr_b", function(_, ia, _, ib)
+		ia:add_item("main", ItemStack("default:steel_ingot 5"))
+		ia:add_item("main", ItemStack("currency:minegeld_10"))
+		ib:add_item("main", ItemStack("currency:minegeld_5"))
+		trade_started("tr_a", "tr_b")
+		put("tr_a", ia, "default:steel_ingot 5", 1)
+		assert(trade.set_money("tr_a", 1000))
+
+		-- B has no room: every slot holds a full stack
+		for i = 1, 32 do ib:set_stack("main", i, ItemStack("default:cobble 99")) end
+		local before_a, before_b = api.balance("tr_a"), api.balance("tr_b")
+		trade.lock("tr_a")
+		local ok, why, who = trade.lock("tr_b")
+		assert(not ok and why == "no_room" and who == "tr_b", tostring(why))
+		assert(api.balance("tr_a") == before_a and api.balance("tr_b") == before_b, "money is back")
+		assert(ia:get_stack(LIST, 1):to_string() == "default:steel_ingot 5", "the offer is still on the table")
+		assert(ib:contains_item("main", ItemStack("default:cobble 99")) and not ib:contains_item("main", ItemStack("default:steel_ingot")))
+		assert(trade.get("tr_a") and not trade.is_locked("tr_a") and not trade.is_locked("tr_b"), "open and unlocked")
+
+		-- A promises more money than they have any more
+		ib:set_list("main", {})
+		ib:add_item("main", ItemStack("currency:minegeld_5"))
+		ia:set_list("main", {})
+		trade.lock("tr_a")
+		local ok2, why2, who2 = trade.lock("tr_b")
+		assert(not ok2 and why2 == "insufficient_funds" and who2 == "tr_a", tostring(why2))
+		assert(api.balance("tr_b") == 500 and ia:get_stack(LIST, 1):get_count() == 5)
+
+		-- cancelling gives everything back
+		assert(trade.cancel("tr_b"))
+		assert(ia:contains_item("main", ItemStack("default:steel_ingot 5")) and ia:get_size(LIST) == 0)
+	end)
+end)
+
+trade_test("leaving, dying or a crash gives the items back", function()
+	with_pair("tr_a", "tr_b", function(pa, ia, _, ib)
+		ia:add_item("main", ItemStack("default:steel_ingot 5"))
+		trade_started("tr_a", "tr_b")
+		put("tr_a", ia, "default:steel_ingot 5", 1)
+		assert(not ia:contains_item("main", ItemStack("default:steel_ingot")))
+		assert(trade.cancel("tr_a", "left"))
+		assert(ia:contains_item("main", ItemStack("default:steel_ingot 5")) and not trade.get("tr_b"))
+
+		-- items left in the list with no trade (a crash) come back
+		ib:set_size(LIST, 32)
+		ib:set_stack(LIST, 3, ItemStack("default:dirt 9"))
+		trade.recover("tr_b")
+		assert(ib:contains_item("main", ItemStack("default:dirt 9")) and ib:get_size(LIST) == 0)
+
+		-- what does not fit waits for the player
+		ib:set_size(LIST, 32)
+		ib:set_stack(LIST, 1, ItemStack("default:dirt 9"))
+		for i = 1, 32 do ib:set_stack("main", i, ItemStack("default:cobble 99")) end
+		trade.recover("tr_b")
+		local waiting = mine_shop_gui.auction.pending("tr_b")
+		assert(#waiting >= 1 and waiting[#waiting].stack == "default:dirt 9")
+		mine_shop_gui.auction.reset()
+	end)
+end)
+
+trade_test("window: shows both sides, and clicks go through the trade", function(messages, sent)
+	with_pair("tr_a", "tr_b", function(_, ia, _, ib)
+		ia:add_item("main", ItemStack("default:steel_ingot 5"))
+		ib:add_item("main", ItemStack("default:gold_ingot 3"))
+		trade_started("tr_a", "tr_b")
+		local spec = assert(sent.tr_a, "the window opened")
+		assert(sent.tr_b)
+		assert(core.strip_escapes(spec):find("Trade with tr_b", 1, true), "the title names the partner")
+		assert(spec:find("detached:" .. trade.mirror_name("tr_b"), 1, true))
+		assert(spec:find("current_player;" .. LIST, 1, true))
+
+		-- money typed in the window goes through the same checks
+		trade_ui.handle("tr_a", { money = "lots", set_money = "x" })
+		assert(trade.money("tr_a") == 0 and core.strip_escapes(sent.tr_a):find("not an amount", 1, true))
+		trade_ui.handle("tr_a", { money = "0", set_money = "x" })
+		put("tr_b", ib, "default:gold_ingot 3", 1)
+		assert(core.strip_escapes(sent.tr_a):find("tr_b offers", 1, true))
+
+		-- the lock button
+		trade_ui.handle("tr_a", { lock = "x" })
+		assert(trade.is_locked("tr_a") and core.strip_escapes(sent.tr_b):find("tr_a locked their offer", 1, true), "the partner is told")
+		trade_ui.handle("tr_a", { unlock = "x" })
+		assert(not trade.is_locked("tr_a"))
+
+		-- somebody with no trade changes nothing
+		trade_ui.handle("tr_stranger", { lock = "x", money = "5", cancel = "x" })
+		assert(trade.get("tr_a"))
+
+		-- closing the window ends it for both
+		trade_ui.handle("tr_b", { quit = "true" })
+		assert(not trade.get("tr_a") and not trade.get("tr_b"))
+		assert(ib:contains_item("main", ItemStack("default:gold_ingot 3")))
+		assert(messages[#messages]:find("cancelled", 1, true), messages[#messages])
+	end)
+end)
+
+if check_syntax then
+	trade_test("window: valid formspec syntax", function(_, sent)
+		with_pair("tr_a", "tr_b", function(_, ia)
+			ia:add_item("main", ItemStack("currency:minegeld_5"))
+			trade_started("tr_a", "tr_b")
+			check_syntax(sent.tr_a, "trade window")
+			trade.set_money("tr_a", 500)
+			trade.lock("tr_a")
+			trade_ui.show("tr_a")
+			check_syntax(sent.tr_a, "trade window, locked")
+			check_syntax(sent.tr_b, "trade window, partner")
+		end)
+	end)
+end
+
+trade_test("command: ask, accept, cancel", function(messages)
+	with_pair("tr_a", "tr_b", function()
+		local run = trade.command.run
+		local ok, text = run("tr_a", "")
+		assert(not ok and text:find("Usage", 1, true))
+		assert(select(1, run("tr_a", "tr_b")) and trade.incoming("tr_b")[1] == "tr_a")
+		local _, waiting = run("tr_b", "")
+		assert(waiting:find("tr_a", 1, true))
+		local ok2, why = run("tr_b", "TR_NOBODY")
+		assert(not ok2 and why:find("not online", 1, true))
+		local ok3, why3 = run("tr_a", "tr_a")
+		assert(not ok3 and why3:find("yourself", 1, true))
+		assert(run("tr_b", "accept") and trade.get("tr_a"))
+		assert(not run("tr_a", "tr_b"), "busy")
+		assert(run("tr_a", "cancel") and not trade.get("tr_b"))
+		-- a request can be taken back
+		assert(run("tr_a", "tr_b") and #trade.incoming("tr_b") == 1)
+		assert(run("tr_a", "cancel") and #trade.incoming("tr_b") == 0)
+		assert(not run("tr_b", "accept"))
+		assert(core.registered_chatcommands.trade.privs.shout and core.registered_chatcommands.trade.privs.interact)
+	end)
+end)
