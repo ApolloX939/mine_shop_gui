@@ -4,11 +4,16 @@
 --   * mine_shop_gui_discord_webhook = the webhook URL of the channel.
 --   * Luanti only lets trusted mods use the internet: add mine_shop_gui to
 --     secure.http_mods in minetest.conf.
---   * For one thread per offer the webhook's channel must be a Forum (or Media)
---     channel: a webhook can only start threads there. Every new offer becomes
---     a thread, and bids, the sale, the end and a take-down are posted into it.
---     For an ordinary text channel set mine_shop_gui_discord_threads = false:
---     each of those becomes a plain message in the channel instead.
+--   * For one thread per offer there are two ways:
+--       - a Forum (or Media) channel: the webhook starts the thread itself.
+--       - an ordinary text channel: also set mine_shop_gui_discord_channel (that
+--         channel's id) and mine_shop_gui_discord_bot_token (a bot that is in the
+--         server and may view the channel, create public threads and send in
+--         threads). The webhook posts the opening message and the bot starts a
+--         thread on it; every later post goes into that thread.
+--     Every new offer becomes a thread, and bids, the sale, the end and a take-down
+--     are posted into it. With mine_shop_gui_discord_threads = false each of those
+--     becomes a plain message in the channel instead.
 --   * The opening message is edited as things change (the current bid, then
 --     SOLD, WON, EXPIRED or TAKEN DOWN with the time it ended; this needs
 --     Luanti 5.7 or newer for PATCH requests). While an offer runs, its end is
@@ -50,6 +55,14 @@ end
 
 function D.threads()
 	return core.settings:get_bool("mine_shop_gui_discord_threads", true)
+end
+
+-- The bot that starts threads on messages in an ordinary text channel: channel id, token.
+-- Both settings are needed; nil otherwise. The token is a secret and is never logged.
+function D.bot()
+	local channel = (core.settings:get("mine_shop_gui_discord_channel") or ""):gsub("%s", "")
+	local token = (core.settings:get("mine_shop_gui_discord_bot_token") or ""):gsub("%s", "")
+	if channel:match("^%d+$") and token ~= "" then return channel, token end
 end
 
 function D.enabled()
@@ -209,11 +222,13 @@ end
 
 -- request = { url, body, method (default POST) }; callback({ ok, code, data }). Replaced by tests.
 function D.transport(request, callback)
+	local headers = { "Content-Type: application/json" }
+	if request.bot_token then headers[#headers + 1] = "Authorization: Bot " .. request.bot_token end
 	http.fetch({
 		url = request.url,
 		method = request.method or "POST",
 		timeout = 10,
-		extra_headers = { "Content-Type: application/json" },
+		extra_headers = headers,
 		data = core.write_json(request.body),
 	}, function(result)
 		callback({ ok = result.succeeded, code = result.code, data = result.data })
@@ -247,7 +262,7 @@ local function pump()
 		else
 			log("warning", "a message was not delivered (HTTP " .. tostring(result.code) .. ")"
 				.. (result.code == 400 and job.thread_name
-					and "; the channel must be a Forum channel for threads, or set mine_shop_gui_discord_threads = false" or ""))
+					and "; the channel must be a Forum channel for threads (or set mine_shop_gui_discord_channel and mine_shop_gui_discord_bot_token for a text channel), or set mine_shop_gui_discord_threads = false" or ""))
 			if job.failed then job.failed() end
 		end
 		core.after(pause, function()
@@ -288,9 +303,13 @@ function D.reset()
 end
 
 -- Where this offer's posts go: the thread, or the channel itself.
-local function target_url(offer, path)
+-- `in_channel`: the opening message of a thread made from a message stays in the channel,
+-- so editing it must not name the thread.
+local function target_url(offer, path, in_channel)
 	local url = D.webhook() .. (path or "")
-	if offer.discord.thread then url = url .. "?thread_id=" .. offer.discord.thread end
+	if offer.discord.thread and not (in_channel and offer.discord.from_message) then
+		url = url .. "?thread_id=" .. offer.discord.thread
+	end
 	return url
 end
 
@@ -306,7 +325,7 @@ local function edit_offer(offer, status)
 	if not target or not target.message then return end
 	send({ request = {
 		method = "PATCH",
-		url = target_url(offer, "/messages/" .. target.message),
+		url = target_url(offer, "/messages/" .. target.message, true),
 		body = { content = D.offer_text(offer, status), allowed_mentions = { parse = {} } },
 	} })
 end
@@ -326,15 +345,37 @@ local function post_offer(offer)
 		-- one edit brings the opening message up to date with all of them
 		if #waiting.events > 0 then edit_offer(offer, waiting.status) end
 	end
+	local bot_channel, bot_token = D.bot()
+	-- text channel: the webhook posts the message and the bot starts the thread on it
+	local from_message = threads and bot_channel ~= nil
 	send({
 		request = {
 			url = url .. "?wait=true",
-			body = body(D.offer_text(offer), threads and { thread_name = D.thread_name(offer) } or nil),
+			body = body(D.offer_text(offer), (threads and not from_message) and { thread_name = D.thread_name(offer) } or nil),
 		},
-		thread_name = threads,
+		thread_name = threads and not from_message,
 		done = function(reply)
 			local message = reply.id and tostring(reply.id) or nil
-			if threads and reply.channel_id then
+			if from_message and message then
+				send({
+					request = {
+						url = "https://discord.com/api/v10/channels/" .. bot_channel .. "/messages/" .. message .. "/threads",
+						bot_token = bot_token,
+						body = { name = D.thread_name(offer), auto_archive_duration = 10080 },
+					},
+					done = function(thread)
+						if thread.id then
+							finish({ thread = tostring(thread.id), message = message, from_message = true })
+						else
+							finish({ plain = true, message = message })
+						end
+					end,
+					failed = function()
+						-- no thread (missing permission?): carry on with plain messages in the channel
+						finish({ plain = true, message = message })
+					end,
+				})
+			elseif threads and not from_message and reply.channel_id then
 				finish({ thread = tostring(reply.channel_id), message = message })
 			else
 				finish({ plain = true, message = message })
@@ -374,7 +415,8 @@ core.register_on_mods_loaded(function()
 	elseif not D.can_send() then
 		log("warning", "the webhook is set but the mod may not use the internet: add mine_shop_gui to secure.http_mods")
 	else
-		log("action", "posting auction offers to Discord" .. (D.threads() and " as threads" or ""))
+		log("action", "posting auction offers to Discord" .. (D.threads()
+			and (D.bot() and " as threads on messages (text channel, bot)" or " as forum threads") or ""))
 	end
 end)
 

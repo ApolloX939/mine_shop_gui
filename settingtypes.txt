@@ -43,6 +43,13 @@ mine_shop_gui_ah_bid_step (Bid step, %) float 5 0 100
 # secure.http_mods in minetest.conf.
 mine_shop_gui_discord_webhook (Discord webhook URL) string
 
+# Text channel threads: the channel's id and a bot's token. The webhook posts the opening
+# message and the bot starts a thread on it (the bot needs to view the channel, create public
+# threads and send messages in threads). Leave both empty for a Forum channel. Treat the
+# token as a secret.
+mine_shop_gui_discord_channel (Channel id for text-channel threads) string
+mine_shop_gui_discord_bot_token (Bot token for text-channel threads) string
+
 # One thread per offer, with bids and the result posted into it. This needs the
 # webhook's channel to be a Forum channel. Turn it off for an ordinary text
 # channel: every message is then posted to the channel itself.
