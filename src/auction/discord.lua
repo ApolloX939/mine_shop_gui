@@ -62,6 +62,51 @@ local function sender_name()
 	return name:sub(1, 80)
 end
 
+---------------------------------------------------------------- emoji
+
+-- Standard emoji by default (written as byte escapes so the file stays plain
+-- ASCII). A server can swap any of them for its own with
+-- mine_shop_gui_discord_emoji_overrides, e.g. sold=<:sold:123456789012345678>,
+-- or turn them all off with mine_shop_gui_discord_emojis = false.
+local EMOJI = {
+	sell = "\240\159\143\183\239\184\143", -- price tag
+	bid = "\240\159\148\168", -- hammer
+	goods = "\240\159\147\166", -- package
+	price = "\240\159\146\176", -- money bag
+	start = "\240\159\143\129", -- chequered flag
+	current_bid = "\240\159\146\181", -- banknote
+	buyout = "\226\154\161", -- high voltage
+	ends = "\226\143\179", -- hourglass
+	ended = "\240\159\143\129", -- chequered flag
+	sold = "\226\156\133", -- check mark
+	won = "\240\159\143\134", -- trophy
+	expired = "\226\140\155", -- hourglass
+	taken_down = "\240\159\154\171", -- prohibited
+}
+
+local overrides
+
+local function parse_overrides()
+	overrides = {}
+	for entry in (core.settings:get("mine_shop_gui_discord_emoji_overrides") or ""):gmatch("[^,]+") do
+		local key, value = entry:match("^%s*([%w_]+)%s*=%s*(%S*)%s*$")
+		if key and EMOJI[key] and #value <= 60 then overrides[key] = value end
+	end
+end
+
+function D.emojis_on()
+	return core.settings:get_bool("mine_shop_gui_discord_emojis", true)
+end
+
+-- The emoji for `key` followed by a space, or "" when emoji are off.
+local function E(key)
+	if not D.emojis_on() then return "" end
+	parse_overrides()
+	local emoji = overrides[key] or EMOJI[key]
+	if not emoji or emoji == "" then return "" end
+	return emoji .. " "
+end
+
 ---------------------------------------------------------------- text
 
 -- Keep player names and item titles from turning into Discord formatting.
@@ -105,7 +150,7 @@ function D.thread_name(offer)
 	for i, stack in ipairs(A.goods(offer)) do
 		names[i] = stack:get_count() .. "x " .. A.title(stack:get_name())
 	end
-	return cut(string.format("#%d %s: %s", offer.id, kind_text(offer), table.concat(names, ", ")), 100)
+	return cut(E(offer.kind) .. string.format("#%d %s: %s", offer.id, kind_text(offer), table.concat(names, ", ")), 100)
 end
 
 -- The message of an offer. `status` is nil while it runs, or the line that
@@ -113,22 +158,22 @@ end
 function D.offer_text(offer, status)
 	local lines = {}
 	if status then lines[1] = "**" .. status .. "**" end
-	lines[#lines + 1] = string.format("**%s #%d** by `%s`", kind_text(offer), offer.id, offer.owner)
-	lines[#lines + 1] = "> " .. goods_text(offer)
+	lines[#lines + 1] = E(offer.kind) .. string.format("**%s #%d** by `%s`", kind_text(offer), offer.id, offer.owner)
+	lines[#lines + 1] = E("goods") .. "> " .. goods_text(offer)
 	if offer.kind == "sell" then
-		lines[#lines + 1] = "**Price:** " .. price_text(offer)
+		lines[#lines + 1] = E("price") .. "**Price:** " .. price_text(offer)
 	else
 		if offer.bidder then
-			lines[#lines + 1] = string.format("**Current bid:** %s by `%s`", api.format_symbol(offer.bid), offer.bidder)
+			lines[#lines + 1] = E("current_bid") .. string.format("**Current bid:** %s by `%s`", api.format_symbol(offer.bid), offer.bidder)
 		else
-			lines[#lines + 1] = "**Starting bid:** " .. api.format_symbol(offer.start)
+			lines[#lines + 1] = E("start") .. "**Starting bid:** " .. api.format_symbol(offer.start)
 		end
-		lines[#lines + 1] = "**Buy-out:** " .. api.format_symbol(offer.buyout)
+		lines[#lines + 1] = E("buyout") .. "**Buy-out:** " .. api.format_symbol(offer.buyout)
 	end
 	if status then
-		lines[#lines + 1] = string.format("**Ended:** <t:%d:f>", A.now())
+		lines[#lines + 1] = E("ended") .. string.format("**Ended:** <t:%d:f>", A.now())
 	else
-		lines[#lines + 1] = string.format("**Ends:** <t:%d:R> (<t:%d:f>)", offer.expires, offer.expires)
+		lines[#lines + 1] = E("ends") .. string.format("**Ends:** <t:%d:R> (<t:%d:f>)", offer.expires, offer.expires)
 		lines[#lines + 1] = "Open the auction house in game with `/ah`."
 	end
 	return cut(table.concat(lines, "\n"), 2000)
@@ -138,22 +183,22 @@ end
 -- do not end it.
 function D.final_status(event, offer, info)
 	if event == "sold" then
-		return string.format("SOLD to `%s` for %s", info.buyer, price_text(offer))
+		return E("sold") .. string.format("SOLD to `%s` for %s", info.buyer, price_text(offer))
 	elseif event == "bought_out" then
-		return string.format("SOLD: bought out by `%s` for %s", info.buyer, api.format_symbol(offer.buyout))
+		return E("sold") .. string.format("SOLD: bought out by `%s` for %s", info.buyer, api.format_symbol(offer.buyout))
 	elseif event == "won" then
-		return string.format("SOLD: won by `%s` with %s", offer.bidder, api.format_symbol(offer.bid))
+		return E("won") .. string.format("SOLD: won by `%s` with %s", offer.bidder, api.format_symbol(offer.bid))
 	elseif event == "expired" then
-		return "EXPIRED: nobody bought it"
+		return E("expired") .. "EXPIRED: nobody bought it"
 	elseif event == "revoked" then
-		return info.by_admin and "TAKEN DOWN by an admin" or "TAKEN DOWN by its owner"
+		return E("taken_down") .. (info.by_admin and "TAKEN DOWN by an admin" or "TAKEN DOWN by its owner")
 	end
 end
 
 -- What an event adds to the offer's thread, or nil if it is not worth posting.
 function D.update_text(event, offer, info)
 	if event == "bid" then
-		return string.format("**New bid:** %s by `%s`. Next bid: %s.", api.format_symbol(info.amount),
+		return E("bid") .. string.format("**New bid:** %s by `%s`. Next bid: %s.", api.format_symbol(info.amount),
 			info.bidder, api.format_symbol(A.next_bid(offer)))
 	end
 	local status = D.final_status(event, offer, info)

@@ -48,6 +48,16 @@ mine_shop_gui_discord_webhook (Discord webhook URL) string
 # channel: every message is then posted to the channel itself.
 mine_shop_gui_discord_threads (Post each offer as a thread) bool true
 
+# Decorate the posts with emoji (a price tag for sales, a hammer for bids, a check
+# mark for SOLD and so on).
+mine_shop_gui_discord_emojis (Use emoji) bool true
+
+# Use your own emoji for some of them: comma-separated key=emoji pairs. Keys: sell,
+# bid, goods, price, start, current_bid, buyout, ends, ended, sold, won, expired,
+# taken_down. A custom server emoji is written <:name:id> (type \:name: in Discord
+# with a backslash in front to see it). Example: sold=<:sold:123456789012345678>
+mine_shop_gui_discord_emoji_overrides (Emoji overrides) string
+
 # The name the posts appear under.
 mine_shop_gui_discord_name (Discord sender name) string Auction House
 

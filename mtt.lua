@@ -2746,7 +2746,7 @@ local discord = auction.discord
 local WEBHOOK = "https://discord.com/api/webhooks/123456789/abc_DEF-ghi"
 
 -- Run fn with a webhook set and a recording transport; real HTTP is never used.
-local function with_discord(fn, threads)
+local function with_discord(fn, threads, emojis)
 	local sent, jobs = {}, {}
 	local transport, can_send, pause = discord.transport, discord.can_send, core.after
 	discord.reset()
@@ -2759,6 +2759,7 @@ local function with_discord(fn, threads)
 	local ok, err = xpcall(function()
 		with_setting("mine_shop_gui_discord_webhook", WEBHOOK, function()
 			with_setting("mine_shop_gui_discord_threads", threads == false and "false" or "true", function()
+				with_setting("mine_shop_gui_discord_emojis", emojis and "true" or "false", function()
 				fn(sent, function(reply) -- answer the oldest unanswered request
 					local callback = table.remove(jobs, 1)
 					callback(reply)
@@ -2766,6 +2767,7 @@ local function with_discord(fn, threads)
 					while #jobs > 0 do
 						table.remove(jobs, 1)({ ok = true, code = 200, data = core.write_json({ id = "1", channel_id = "9" }) })
 					end
+				end)
 				end)
 			end)
 		end)
@@ -2900,5 +2902,35 @@ auction_test("discord: names cannot add formatting, failures and slow-downs are 
 		reply({ ok = false, code = 400, data = "no" })
 		auction.revoke("dc_o4", offer.id)
 		assert(#sent == 2 and discord.queued() == 0, "nothing more is sent for an offer that never reached Discord")
+	end)
+end)
+
+auction_test("discord: emoji decorate the posts, can be replaced or turned off", function()
+	with_discord(function(sent, reply)
+		local _, offer = auction.create("dc_e", { kind = "sell", goods = stacks("default:cobble"), money = 100 })
+		local tag = "\240\159\143\183\239\184\143"
+		assert(sent[1].body.thread_name:sub(1, #tag) == tag, "the thread name starts with a price tag")
+		local text = sent[1].body.content
+		for _, emoji in ipairs({ "\240\159\147\166", "\240\159\146\176", "\226\143\179" }) do
+			assert(text:find(emoji, 1, true), "package, money bag and hourglass appear")
+		end
+		reply({ ok = true, code = 200, data = core.write_json({ id = "5", channel_id = "6" }) })
+
+		-- your own emoji replace the standard ones, an empty value drops one
+		with_setting("mine_shop_gui_discord_emoji_overrides", "sold=<:sold:123456789012345678>, goods=, bogus=x", function()
+			auction.revoke("dc_e", offer.id)
+			local _, again = auction.create("dc_e", { kind = "sell", goods = stacks("default:dirt"), money = 100 })
+			assert(not discord.offer_text(again):find("\240\159\147\166", 1, true), "goods emoji dropped")
+			assert(discord.final_status("sold", again, { buyer = "x" }):find("^<:sold:123456789012345678> SOLD"))
+			assert(discord.final_status("expired", again, {}):find("\226\140\155", 1, true), "others stay standard")
+		end)
+	end, true, true)
+
+	-- off: no emoji at all, as before
+	with_discord(function(sent)
+		local _, offer = auction.create("dc_e2", { kind = "bid", goods = stacks("default:cobble"), start = 100 })
+		assert(sent[1].body.thread_name:find("^#"), "no emoji in the thread name")
+		assert(not sent[1].body.content:find("[\128-\255]"), "no emoji in the message")
+		assert(discord.final_status("expired", offer, {}) == "EXPIRED: nobody bought it")
 	end)
 end)
