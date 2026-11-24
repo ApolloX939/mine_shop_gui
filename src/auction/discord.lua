@@ -9,6 +9,11 @@
 --     a thread, and bids, the sale, the end and a take-down are posted into it.
 --     For an ordinary text channel set mine_shop_gui_discord_threads = false:
 --     each of those becomes a plain message in the channel instead.
+--   * The opening message is edited as things change (the current bid, then
+--     SOLD, WON, EXPIRED or TAKEN DOWN with the time it ended; this needs
+--     Luanti 5.7 or newer for PATCH requests). While an offer runs, its end is
+--     a Discord relative time ("in 3 hours") that counts down by itself in
+--     everyone's Discord, so it needs no edits.
 --
 -- Only offer facts go out (items, prices, player names, time). Mentions are
 -- switched off, so a player name or item title cannot ping anyone. The URL is
@@ -103,21 +108,46 @@ function D.thread_name(offer)
 	return cut(string.format("#%d %s: %s", offer.id, kind_text(offer), table.concat(names, ", ")), 100)
 end
 
--- The opening message of an offer.
-function D.offer_text(offer)
-	local lines = {
-		string.format("**%s #%d** by `%s`", kind_text(offer), offer.id, offer.owner),
-		"> " .. goods_text(offer),
-	}
+-- The message of an offer. `status` is nil while it runs, or the line that
+-- says how it ended; then the end time is the moment it ended.
+function D.offer_text(offer, status)
+	local lines = {}
+	if status then lines[1] = "**" .. status .. "**" end
+	lines[#lines + 1] = string.format("**%s #%d** by `%s`", kind_text(offer), offer.id, offer.owner)
+	lines[#lines + 1] = "> " .. goods_text(offer)
 	if offer.kind == "sell" then
 		lines[#lines + 1] = "**Price:** " .. price_text(offer)
 	else
-		lines[#lines + 1] = "**Starting bid:** " .. api.format_symbol(offer.start)
+		if offer.bidder then
+			lines[#lines + 1] = string.format("**Current bid:** %s by `%s`", api.format_symbol(offer.bid), offer.bidder)
+		else
+			lines[#lines + 1] = "**Starting bid:** " .. api.format_symbol(offer.start)
+		end
 		lines[#lines + 1] = "**Buy-out:** " .. api.format_symbol(offer.buyout)
 	end
-	lines[#lines + 1] = string.format("**Ends:** <t:%d:R>", offer.expires)
-	lines[#lines + 1] = "Open the auction house in game with `/ah`."
+	if status then
+		lines[#lines + 1] = string.format("**Ended:** <t:%d:f>", A.now())
+	else
+		lines[#lines + 1] = string.format("**Ends:** <t:%d:R> (<t:%d:f>)", offer.expires, offer.expires)
+		lines[#lines + 1] = "Open the auction house in game with `/ah`."
+	end
 	return cut(table.concat(lines, "\n"), 2000)
+end
+
+-- How the offer ended, for the edited opening message; nil for events that
+-- do not end it.
+function D.final_status(event, offer, info)
+	if event == "sold" then
+		return string.format("SOLD to `%s` for %s", info.buyer, price_text(offer))
+	elseif event == "bought_out" then
+		return string.format("SOLD: bought out by `%s` for %s", info.buyer, api.format_symbol(offer.buyout))
+	elseif event == "won" then
+		return string.format("SOLD: won by `%s` with %s", offer.bidder, api.format_symbol(offer.bid))
+	elseif event == "expired" then
+		return "EXPIRED: nobody bought it"
+	elseif event == "revoked" then
+		return info.by_admin and "TAKEN DOWN by an admin" or "TAKEN DOWN by its owner"
+	end
 end
 
 -- What an event adds to the offer's thread, or nil if it is not worth posting.
@@ -125,26 +155,18 @@ function D.update_text(event, offer, info)
 	if event == "bid" then
 		return string.format("**New bid:** %s by `%s`. Next bid: %s.", api.format_symbol(info.amount),
 			info.bidder, api.format_symbol(A.next_bid(offer)))
-	elseif event == "sold" then
-		return string.format("**Sold** to `%s` for %s.", info.buyer, price_text(offer))
-	elseif event == "bought_out" then
-		return string.format("**Bought out** by `%s` for %s.", info.buyer, api.format_symbol(offer.buyout))
-	elseif event == "won" then
-		return string.format("**Ended.** `%s` won with %s.", offer.bidder, api.format_symbol(offer.bid))
-	elseif event == "expired" then
-		return "**Ended** without a buyer."
-	elseif event == "revoked" then
-		return info.by_admin and "**Taken down** by an admin." or "**Taken down** by its owner."
 	end
+	local status = D.final_status(event, offer, info)
+	if status then return "**" .. status .. "**" end
 end
 
 ---------------------------------------------------------------- sending
 
--- request = { url, body }; callback({ ok, code, data }). Replaced by tests.
+-- request = { url, body, method (default POST) }; callback({ ok, code, data }). Replaced by tests.
 function D.transport(request, callback)
 	http.fetch({
 		url = request.url,
-		method = "POST",
+		method = request.method or "POST",
 		timeout = 10,
 		extra_headers = { "Content-Type: application/json" },
 		data = core.write_json(request.body),
@@ -220,41 +242,57 @@ function D.reset()
 	creating = {}
 end
 
+-- Where this offer's posts go: the thread, or the channel itself.
+local function target_url(offer, path)
+	local url = D.webhook() .. (path or "")
+	if offer.discord.thread then url = url .. "?thread_id=" .. offer.discord.thread end
+	return url
+end
+
+-- Say something new in the offer's thread (or the channel).
 local function post_update(offer, text)
+	if not offer.discord.thread then text = string.format("**#%d** %s", offer.id, text) end
+	send({ request = { url = target_url(offer), body = body(text) } })
+end
+
+-- Rewrite the opening message to match the offer now.
+local function edit_offer(offer, status)
 	local target = offer.discord
-	if not target then
-		if creating[offer.id] then table.insert(creating[offer.id], text) end
-		return
-	end
-	if target.thread then
-		send({ request = { url = D.webhook() .. "?thread_id=" .. target.thread, body = body(text) } })
-	else
-		send({ request = { url = D.webhook(), body = body(string.format("**#%d** %s", offer.id, text)) } })
-	end
+	if not target or not target.message then return end
+	send({ request = {
+		method = "PATCH",
+		url = target_url(offer, "/messages/" .. target.message),
+		body = { content = D.offer_text(offer, status), allowed_mentions = { parse = {} } },
+	} })
 end
 
 local function post_offer(offer)
 	local url, threads = D.webhook(), D.threads()
-	creating[offer.id] = {}
-	local request = {
-		url = url .. "?wait=true",
-		body = body(D.offer_text(offer), threads and { thread_name = D.thread_name(offer) } or nil),
-	}
+	-- events that happen before Discord has answered wait here
+	creating[offer.id] = { events = {} }
 	local function finish(target)
-		local waiting = creating[offer.id] or {}
+		local waiting = creating[offer.id]
 		creating[offer.id] = nil
 		offer.discord = target
 		A.save()
-		for _, text in ipairs(waiting) do post_update(offer, text) end
+		for _, item in ipairs(waiting.events) do
+			if item.text then post_update(offer, item.text) end
+		end
+		-- one edit brings the opening message up to date with all of them
+		if #waiting.events > 0 then edit_offer(offer, waiting.status) end
 	end
 	send({
-		request = request,
+		request = {
+			url = url .. "?wait=true",
+			body = body(D.offer_text(offer), threads and { thread_name = D.thread_name(offer) } or nil),
+		},
 		thread_name = threads,
 		done = function(reply)
+			local message = reply.id and tostring(reply.id) or nil
 			if threads and reply.channel_id then
-				finish({ thread = tostring(reply.channel_id) })
+				finish({ thread = tostring(reply.channel_id), message = message })
 			else
-				finish({ plain = true })
+				finish({ plain = true, message = message })
 			end
 		end,
 		failed = function()
@@ -271,7 +309,14 @@ function D.on_event(event, offer, info)
 		return
 	end
 	local text = D.update_text(event, offer, info)
-	if text then post_update(offer, text) end
+	local status = D.final_status(event, offer, info)
+	if offer.discord then
+		if text then post_update(offer, text) end
+		edit_offer(offer, status)
+	elseif creating[offer.id] then
+		table.insert(creating[offer.id].events, { text = text })
+		if status then creating[offer.id].status = status end
+	end
 end
 
 A.on(D.on_event)

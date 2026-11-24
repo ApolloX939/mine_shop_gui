@@ -2821,9 +2821,23 @@ auction_test("discord: an offer becomes a thread and its events are posted into 
 			assert(sent[2].body.content:find("New bid", 1, true) and sent[2].body.content:find("`dc_bidder`", 1, true))
 			assert(sent[2].body.thread_name == nil)
 
-			reply({ ok = true, code = 204, data = "" })
+			-- then the opening message is edited to show the bid
+			reply({ ok = true, code = 200, data = "{}" })
+			assert(#sent == 3 and sent[3].method == "PATCH", "an edit follows")
+			assert(sent[3].url == WEBHOOK .. "/messages/55?thread_id=777", sent[3].url)
+			assert(sent[3].body.content:find("Current bid", 1, true) and sent[3].body.content:find("`dc_bidder`", 1, true))
+			assert(sent[3].body.content:find("<t:" .. offer.expires .. ":R>", 1, true), "still running: a live countdown")
+			assert(sent[3].body.thread_name == nil and sent[3].body.username == nil)
+
+			-- taking it down: a post in the thread, then a last edit that closes the opening message
+			reply({ ok = true, code = 200, data = "{}" })
 			assert(auction.revoke("dc_owner", offer.id))
-			assert(#sent == 3 and sent[3].body.content:find("Taken down", 1, true) and sent[3].url:find("thread_id=777", 1, true))
+			reply({ ok = true, code = 200, data = "{}" })
+			assert(#sent == 5)
+			assert(sent[4].method == nil and sent[4].body.content:find("TAKEN DOWN", 1, true) and sent[4].url:find("thread_id=777", 1, true))
+			assert(sent[5].method == "PATCH" and sent[5].body.content:find("^%*%*TAKEN DOWN by its owner%*%*"))
+			assert(sent[5].body.content:find("**Ended:** <t:", 1, true) and not sent[5].body.content:find(":R>", 1, true),
+				"the countdown is replaced by the time it ended")
 		end)
 	end)
 end)
@@ -2843,7 +2857,9 @@ auction_test("discord: sold, bought out, won and expired offers are announced", 
 			inv:add_item("main", ItemStack("default:gold_ingot 2"))
 			assert(auction.buy("dc_buyer", sale.id))
 			answer(1)
-			assert(sent[2].body.content:find("**Sold** to `dc_buyer`", 1, true))
+			assert(sent[2].body.content:find("SOLD to `dc_buyer`", 1, true))
+			answer(1)
+			assert(sent[3].method == "PATCH" and sent[3].body.content:find("^%*%*SOLD to `dc_buyer`"), "the opening message says SOLD")
 
 			local _, held = auction.create("dc_o2", { kind = "bid", goods = stacks("default:dirt"), start = 100, hours = 1 })
 			local _, nobody = auction.create("dc_o2", { kind = "sell", goods = stacks("default:dirt"), money = 100, hours = 1 })
@@ -2855,7 +2871,7 @@ auction_test("discord: sold, bought out, won and expired offers are announced", 
 			local text = {}
 			for _, request in ipairs(sent) do text[#text + 1] = request.body.content end
 			local all = table.concat(text, "\n")
-			assert(all:find("won with", 1, true) and all:find("without a buyer", 1, true) and all:find("New bid", 1, true))
+			assert(all:find("won by `dc_buyer`", 1, true) and all:find("EXPIRED", 1, true) and all:find("New bid", 1, true))
 		end)
 	end)
 end)
