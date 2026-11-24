@@ -35,6 +35,22 @@ mine_shop_gui_ah_max_hours (Longest offer, hours) int 168 1 168
 # How much more than the last bid a new bid must be, in percent (never less than the smallest coin).
 mine_shop_gui_ah_bid_step (Bid step, %) float 5 0 100
 
+[Auction house: Discord]
+
+# Post auction offers to Discord. Paste the channel's webhook URL (Channel settings,
+# Integrations, Webhooks). Leave empty to turn this off. Treat the URL as a secret.
+# The mod also has to be allowed to use the internet: add mine_shop_gui to
+# secure.http_mods in minetest.conf.
+mine_shop_gui_discord_webhook (Discord webhook URL) string
+
+# One thread per offer, with bids and the result posted into it. This needs the
+# webhook's channel to be a Forum channel. Turn it off for an ordinary text
+# channel: every message is then posted to the channel itself.
+mine_shop_gui_discord_threads (Post each offer as a thread) bool true
+
+# The name the posts appear under.
+mine_shop_gui_discord_name (Discord sender name) string Auction House
+
 [Pricing]
 
 # Percentage added to the cost of items made with each recipe type.

@@ -328,3 +328,12 @@ Window (`ui.lua`): tabs Browse (filters All/Selling/Bidding, search, 5 rows a pa
 Command (`command.lua`): `/ah`, `/ah sell|bid hand|<itemstring>|<item name> [<amount>|all]` (takes the items out of the inventory and opens the create window; `hand` takes the stack in hand, anything else one item unless told), `/ah claim`, `/ah revoke <number>`.
 
 Tested in the real engine (`auction:` tests in `mtt.lua`): validation, buying with money/items/Minegeld notes, change, offline owners, no-room and no-funds changing nothing, bidding, outbid refunds, buy-out, expiry both ways, revoke by owner and admin, listing and search, the window end to end, forged fields, the command, and formspec syntax. Not tested: the appearance in a real client, the `credits` and `cookies` adapters' `stack_value`, a server restart with offers in storage.
+
+### Discord posting (`src/auction/discord.lua`, optional)
+
+Asked for by the owner: post auction offers into a Discord channel as threads.
+- A webhook can only start threads in a Forum/Media channel (`thread_name`); follow-ups go to `?thread_id=`. For a text channel `mine_shop_gui_discord_threads = false` posts plain messages instead. (A webhook cannot make a thread from a message; that needs a bot, which would mean a token and a gateway, so it was not done.)
+- The auction core emits events (`A.on(fn)`: created, bid, sold, bought_out, won, expired, revoked); the Discord module is just a listener, so the core knows nothing about Discord.
+- Needs `secure.http_mods = mine_shop_gui` (the HTTP API is requested at load time). Only discord.com / discordapp.com webhook URLs over https are accepted, so offer data cannot be pointed at another host. The URL is never logged or put in a message. Mentions are off and names are escaped.
+- Sending is a one-at-a-time queue with a 0.6 s pause; HTTP 429 is retried after `retry_after` (up to 5 times); any other failure is logged and dropped, never touching the offer. The thread id is stored on the offer (`offer.discord`) so updates survive restarts; events that happen before Discord answers wait for the thread. Offers made before the setup are not posted.
+- Tested with a recording transport (real HTTP is never used): URL validation, thread creation and its payload, waiting updates, plain mode, all end events, 429 retry, failure. Not tested against real Discord.

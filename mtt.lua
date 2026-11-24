@@ -2739,3 +2739,150 @@ auction_test("window: formspec syntax of every screen", function()
 		end)
 	end)
 end)
+
+---------------------------------------------------------------- auction house: Discord
+
+local discord = auction.discord
+local WEBHOOK = "https://discord.com/api/webhooks/123456789/abc_DEF-ghi"
+
+-- Run fn with a webhook set and a recording transport; real HTTP is never used.
+local function with_discord(fn, threads)
+	local sent, jobs = {}, {}
+	local transport, can_send, pause = discord.transport, discord.can_send, core.after
+	discord.reset()
+	discord.can_send = function() return true end
+	discord.transport = function(request, callback)
+		sent[#sent + 1] = request
+		jobs[#jobs + 1] = callback
+	end
+	core.after = function(_, f) f() end
+	local ok, err = xpcall(function()
+		with_setting("mine_shop_gui_discord_webhook", WEBHOOK, function()
+			with_setting("mine_shop_gui_discord_threads", threads == false and "false" or "true", function()
+				fn(sent, function(reply) -- answer the oldest unanswered request
+					local callback = table.remove(jobs, 1)
+					callback(reply)
+				end, function() -- answer everything that is still waiting
+					while #jobs > 0 do
+						table.remove(jobs, 1)({ ok = true, code = 200, data = core.write_json({ id = "1", channel_id = "9" }) })
+					end
+				end)
+			end)
+		end)
+	end, debug.traceback)
+	discord.transport, discord.can_send, core.after = transport, can_send, pause
+	discord.reset()
+	assert(ok, err)
+end
+
+auction_test("discord: only real webhook URLs are used, and only when set", function()
+	with_setting("mine_shop_gui_discord_webhook", "", function() assert(discord.webhook() == nil) end)
+	with_setting("mine_shop_gui_discord_webhook", "https://example.com/api/webhooks/1/abc", function()
+		assert(discord.webhook() == nil, "another host is refused")
+	end)
+	with_setting("mine_shop_gui_discord_webhook", "http://discord.com/api/webhooks/1/abc", function()
+		assert(discord.webhook() == nil, "plain http is refused")
+	end)
+	with_setting("mine_shop_gui_discord_webhook", " " .. WEBHOOK .. "?wait=false ", function()
+		assert(discord.webhook() == WEBHOOK, "spaces and a query are dropped")
+	end)
+	with_setting("mine_shop_gui_discord_webhook", "https://canary.discord.com/api/webhooks/1/abc", function()
+		assert(discord.webhook())
+	end)
+	with_discord(function(sent)
+		core.settings:set("mine_shop_gui_discord_webhook", "")
+		auction.create("dc_off", { kind = "sell", goods = stacks("default:cobble"), money = 100 })
+		assert(#sent == 0, "nothing is sent without a webhook")
+	end)
+end)
+
+auction_test("discord: an offer becomes a thread and its events are posted into it", function()
+	with_discord(function(sent, reply)
+		local _, offer = auction.create("dc_owner", { kind = "bid", goods = stacks("default:diamond 2", "default:dirt"), start = 100 })
+		assert(#sent == 1)
+		local first = sent[1]
+		assert(first.url == WEBHOOK .. "?wait=true")
+		assert(first.body.thread_name:find("^#%d+ Bidding: 2x"), first.body.thread_name)
+		assert(#first.body.thread_name <= 100)
+		assert(first.body.content:find("`dc_owner`", 1, true) and first.body.content:find("Buy-out", 1, true))
+		assert(first.body.content:find("<t:" .. offer.expires .. ":R>", 1, true))
+		assert(first.body.allowed_mentions.parse[1] == nil and #first.body.allowed_mentions.parse == 0, "mentions off")
+		assert(not core.write_json(first.body):find("123456789", 1, true), "the URL is not in the message")
+
+		-- events that happen before Discord answers wait for the thread
+		with_player("dc_bidder", function(_, inv)
+			inv:set_list("main", {})
+			inv:add_item("main", ItemStack("currency:minegeld_5"))
+			assert(auction.bid("dc_bidder", offer.id))
+			assert(#sent == 1, "waiting for the thread")
+			reply({ ok = true, code = 200, data = core.write_json({ id = "55", channel_id = "777" }) })
+			assert(offer.discord.thread == "777", "the thread is remembered on the offer")
+			assert(#sent == 2 and sent[2].url == WEBHOOK .. "?thread_id=777", "the queued bid follows")
+			assert(sent[2].body.content:find("New bid", 1, true) and sent[2].body.content:find("`dc_bidder`", 1, true))
+			assert(sent[2].body.thread_name == nil)
+
+			reply({ ok = true, code = 204, data = "" })
+			assert(auction.revoke("dc_owner", offer.id))
+			assert(#sent == 3 and sent[3].body.content:find("Taken down", 1, true) and sent[3].url:find("thread_id=777", 1, true))
+		end)
+	end)
+end)
+
+auction_test("discord: sold, bought out, won and expired offers are announced", function(_, advance)
+	with_discord(function(sent, reply, drain)
+		local function answer(n)
+			for _ = 1, n do reply({ ok = true, code = 200, data = core.write_json({ id = "1", channel_id = "9" }) }) end
+		end
+		with_player("dc_buyer", function(_, inv)
+			inv:set_list("main", {})
+			inv:add_item("main", ItemStack("currency:minegeld_10"))
+			local _, sale = auction.create("dc_o2", { kind = "sell", goods = stacks("default:cobble"), money = 100,
+				price_items = stacks("default:gold_ingot 2"), hours = 1 })
+			assert(sent[1].body.content:find("**Price:**", 1, true) and sent[1].body.content:find("2x Gold Ingot", 1, true))
+			answer(1)
+			inv:add_item("main", ItemStack("default:gold_ingot 2"))
+			assert(auction.buy("dc_buyer", sale.id))
+			answer(1)
+			assert(sent[2].body.content:find("**Sold** to `dc_buyer`", 1, true))
+
+			local _, held = auction.create("dc_o2", { kind = "bid", goods = stacks("default:dirt"), start = 100, hours = 1 })
+			local _, nobody = auction.create("dc_o2", { kind = "sell", goods = stacks("default:dirt"), money = 100, hours = 1 })
+			answer(2)
+			assert(auction.bid("dc_buyer", held.id))
+			advance(2 * 3600)
+			auction.process_expired()
+			drain()
+			local text = {}
+			for _, request in ipairs(sent) do text[#text + 1] = request.body.content end
+			local all = table.concat(text, "\n")
+			assert(all:find("won with", 1, true) and all:find("without a buyer", 1, true) and all:find("New bid", 1, true))
+		end)
+	end)
+end)
+
+auction_test("discord: without threads every event is a plain message", function()
+	with_discord(function(sent, reply)
+		local _, offer = auction.create("dc_o3", { kind = "sell", goods = stacks("default:cobble"), money = 100 })
+		assert(sent[1].body.thread_name == nil, "no thread requested")
+		reply({ ok = true, code = 200, data = core.write_json({ id = "1", channel_id = "9" }) })
+		assert(offer.discord.plain and not offer.discord.thread)
+		auction.revoke("dc_o3", offer.id)
+		assert(sent[2].url == WEBHOOK and sent[2].body.content:find("#" .. offer.id, 1, true))
+	end, false)
+end)
+
+auction_test("discord: names cannot add formatting, failures and slow-downs are handled", function()
+	with_discord(function(sent, reply)
+		local _, offer = auction.create("dc_o4", { kind = "sell", goods = stacks("default:cobble"), money = 100 })
+		assert(discord.offer_text(offer):find("`dc_o4`", 1, true))
+		assert(discord.thread_name(offer) ~= "")
+
+		-- told to slow down: the same message is sent again
+		reply({ ok = false, code = 429, data = core.write_json({ retry_after = 0.2 }) })
+		assert(#sent == 2 and sent[2] == sent[1], "retried")
+		-- a failure is dropped and later events are not sent anywhere
+		reply({ ok = false, code = 400, data = "no" })
+		auction.revoke("dc_o4", offer.id)
+		assert(#sent == 2 and discord.queued() == 0, "nothing more is sent for an offer that never reached Discord")
+	end)
+end)

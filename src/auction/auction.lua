@@ -49,6 +49,25 @@ local function save()
 	storage:set_string("auction", core.serialize(data))
 end
 
+A.save = save
+
+-- Listeners hear about every change to an offer: fn(event, offer, info).
+-- Events: "created", "bid" (info.bidder, info.amount), "sold" (info.buyer),
+-- "bought_out" (info.buyer), "won" (the highest bidder took it at the end),
+-- "expired" (nobody bought it), "revoked" (info.actor, info.by_admin).
+A.listeners = {}
+
+function A.on(fn)
+	A.listeners[#A.listeners + 1] = fn
+end
+
+local function emit(event, offer, info)
+	for _, fn in ipairs(A.listeners) do
+		local ok, err = pcall(fn, event, offer, info or {})
+		if not ok then core.log("error", "[mine_shop_gui] auction listener failed: " .. tostring(err)) end
+	end
+end
+
 load()
 
 -- Forget every offer and queued delivery. For tests only.
@@ -367,6 +386,7 @@ function A.create(owner, spec)
 	data.next_id = data.next_id + 1
 	data.offers[offer.id] = offer
 	save()
+	emit("created", offer)
 	return true, offer
 end
 
@@ -463,6 +483,7 @@ function A.buy(buyer, id)
 	deliver_items(offer.owner, price_stacks(offer))
 	save()
 	A.notify(offer.owner, S("@1 bought your offer #@2.", buyer, offer.id))
+	emit("sold", offer, { buyer = buyer })
 	return true, { offer = offer }
 end
 
@@ -490,6 +511,7 @@ function A.buyout(buyer, id)
 	deliver_money(offer.owner, offer.buyout)
 	save()
 	A.notify(offer.owner, S("@1 bought out your offer #@2.", buyer, offer.id))
+	emit("bought_out", offer, { buyer = buyer })
 	return true, { offer = offer, cost = offer.buyout }
 end
 
@@ -517,6 +539,7 @@ function A.bid(bidder, id, amount)
 	end
 	save()
 	A.notify(offer.owner, S("@1 bid @2 on your offer #@3.", bidder, api.format_symbol(amount), offer.id))
+	emit("bid", offer, { bidder = bidder, amount = amount })
 	return true, { offer = offer, amount = amount }
 end
 
@@ -538,6 +561,7 @@ function A.revoke(actor, id)
 	if actor ~= offer.owner then
 		A.notify(offer.owner, S("An admin took down your offer #@1.", offer.id))
 	end
+	emit("revoked", offer, { actor = actor, by_admin = actor ~= offer.owner })
 	return true, { offer = offer }
 end
 
@@ -554,12 +578,14 @@ function A.process_expired()
 					deliver_money(offer.owner, offer.bid)
 					A.notify(offer.bidder, S("You won offer #@1.", offer.id))
 					A.notify(offer.owner, S("Your offer #@1 sold for @2.", offer.id, api.format_symbol(offer.bid)))
+					emit("won", offer)
 					closed = closed + 1
 				end
 			else
 				remove(offer)
 				deliver_items(offer.owner, A.goods(offer))
 				A.notify(offer.owner, S("Your offer #@1 ended without a buyer. The items were returned.", offer.id))
+				emit("expired", offer)
 				closed = closed + 1
 			end
 		end

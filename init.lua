@@ -43,6 +43,7 @@ load("src/shop/sell_command")
 load("src/auction/auction")
 load("src/auction/ui")
 load("src/auction/command")
+load("src/auction/discord")
 
 -- Integration tests, only when the mtt test framework is enabled.
 if core.get_modpath("mtt") and mtt and mtt.enabled then

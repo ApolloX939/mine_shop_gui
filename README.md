@@ -27,6 +27,17 @@ Players trade with each other in the auction house: press **Auction** in the sho
 
 Commands: `/ah`, `/ah sell hand|<itemstring>|<item name> [<amount>|all]`, `/ah bid ...` (the same), `/ah claim`, `/ah revoke <number>`. `sell` and `bid` take the items out of your inventory and open the window where you set the price. While that window is open the items are held in it; closing it gives them back.
 
+### Discord (optional)
+
+Offers can be posted to Discord. In your server make a **Forum** channel, then Channel settings, Integrations, Webhooks, New Webhook, and copy its URL. On the Luanti server:
+
+```
+mine_shop_gui_discord_webhook = https://discord.com/api/webhooks/<id>/<token>
+secure.http_mods = mine_shop_gui
+```
+
+Every new offer becomes a thread (items, price, owner, when it ends); bids, the sale or win, the end without a buyer and take-downs are posted into it. Mentions are switched off, so a player name or item title cannot ping anyone. Only offers made after the setup are posted. For an ordinary text channel set `mine_shop_gui_discord_threads = false`: the same messages are then posted to the channel as plain messages (a webhook cannot start threads there). Keep the URL secret: anyone who has it can post in the channel. It is never written to the log. Sending is one message at a time and a failure is logged and skipped, never affecting an offer.
+
 Settings: `mine_shop_gui_ah_max_offers`, `mine_shop_gui_ah_duration`, `mine_shop_gui_ah_max_hours`, `mine_shop_gui_ah_bid_step`.
 
 ## Currencies
