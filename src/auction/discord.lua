@@ -9,8 +9,9 @@
 --       - an ordinary text channel: also set mine_shop_gui_discord_channel (that
 --         channel's id) and mine_shop_gui_discord_bot_token (a bot that is in the
 --         server and may view the channel, create public threads and send in
---         threads). The webhook posts the opening message and the bot starts a
---         thread on it; every later post goes into that thread.
+--         threads). The channel only gets a title line ("Selling #7 by Name"); the
+--         bot starts a thread on it, and the details (items, price, end time, bids,
+--         the result) all live in that thread.
 --     Every new offer becomes a thread, and bids, the sale, the end and a take-down
 --     are posted into it. With mine_shop_gui_discord_threads = false each of those
 --     becomes a plain message in the channel instead.
@@ -192,6 +193,11 @@ function D.offer_text(offer, status)
 	return cut(table.concat(lines, "\n"), 2000)
 end
 
+-- The one line a text channel gets for an offer: the title of its thread.
+function D.head_text(offer)
+	return cut(E(offer.kind) .. string.format("**%s #%d** by `%s`", kind_text(offer), offer.id, offer.owner), 200)
+end
+
 -- How the offer ended, for the edited opening message; nil for events that
 -- do not end it.
 function D.final_status(event, offer, info)
@@ -303,13 +309,9 @@ function D.reset()
 end
 
 -- Where this offer's posts go: the thread, or the channel itself.
--- `in_channel`: the opening message of a thread made from a message stays in the channel,
--- so editing it must not name the thread.
-local function target_url(offer, path, in_channel)
+local function target_url(offer, path)
 	local url = D.webhook() .. (path or "")
-	if offer.discord.thread and not (in_channel and offer.discord.from_message) then
-		url = url .. "?thread_id=" .. offer.discord.thread
-	end
+	if offer.discord.thread then url = url .. "?thread_id=" .. offer.discord.thread end
 	return url
 end
 
@@ -325,7 +327,7 @@ local function edit_offer(offer, status)
 	if not target or not target.message then return end
 	send({ request = {
 		method = "PATCH",
-		url = target_url(offer, "/messages/" .. target.message, true),
+		url = target_url(offer, "/messages/" .. target.message),
 		body = { content = D.offer_text(offer, status), allowed_mentions = { parse = {} } },
 	} })
 end
@@ -346,12 +348,14 @@ local function post_offer(offer)
 		if #waiting.events > 0 then edit_offer(offer, waiting.status) end
 	end
 	local bot_channel, bot_token = D.bot()
-	-- text channel: the webhook posts the message and the bot starts the thread on it
+	-- text channel: the webhook posts just a title line, the bot starts a thread on it and the
+	-- details are posted inside the thread
 	local from_message = threads and bot_channel ~= nil
 	send({
 		request = {
 			url = url .. "?wait=true",
-			body = body(D.offer_text(offer), (threads and not from_message) and { thread_name = D.thread_name(offer) } or nil),
+			body = body(from_message and D.head_text(offer) or D.offer_text(offer),
+				(threads and not from_message) and { thread_name = D.thread_name(offer) } or nil),
 		},
 		thread_name = threads and not from_message,
 		done = function(reply)
@@ -364,15 +368,33 @@ local function post_offer(offer)
 						body = { name = D.thread_name(offer), auto_archive_duration = 10080 },
 					},
 					done = function(thread)
-						if thread.id then
-							finish({ thread = tostring(thread.id), message = message, from_message = true })
-						else
+						if not thread.id then
 							finish({ plain = true, message = message })
+							return
 						end
+						local thread_id = tostring(thread.id)
+						-- the details go into the thread; that message is the one edited later
+						send({
+							request = { url = url .. "?wait=true&thread_id=" .. thread_id, body = body(D.offer_text(offer)) },
+							done = function(info)
+								finish({ thread = thread_id, message = info.id and tostring(info.id) or nil,
+									head = message, from_message = true })
+							end,
+							failed = function()
+								finish({ thread = thread_id, head = message, from_message = true })
+							end,
+						})
 					end,
 					failed = function()
-						-- no thread (missing permission?): carry on with plain messages in the channel
-						finish({ plain = true, message = message })
+						-- no thread (missing permission?): the title is already in the channel, so
+						-- put the details there too and carry on with plain messages
+						send({
+							request = { url = url .. "?wait=true", body = body(D.offer_text(offer)) },
+							done = function(info)
+								finish({ plain = true, message = info.id and tostring(info.id) or nil })
+							end,
+							failed = function() finish({ plain = true }) end,
+						})
 					end,
 				})
 			elseif threads and not from_message and reply.channel_id then

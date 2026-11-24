@@ -2844,13 +2844,15 @@ auction_test("discord: an offer becomes a thread and its events are posted into 
 	end)
 end)
 
-auction_test("discord: in a text channel the bot starts a thread on the opening message", function()
+auction_test("discord: in a text channel the bot starts a thread on a title line, details go in the thread", function()
 	with_setting("mine_shop_gui_discord_channel", "4242", function()
 		with_setting("mine_shop_gui_discord_bot_token", "SECRET.token", function()
 			with_discord(function(sent, reply)
 				local _, offer = auction.create("dc_owner", { kind = "sell", goods = stacks("default:dirt 3"), money = 50 })
 				assert(#sent == 1 and sent[1].url == WEBHOOK .. "?wait=true")
 				assert(sent[1].body.thread_name == nil, "a text channel webhook cannot start threads")
+				assert(sent[1].body.content:find("Selling #" .. offer.id, 1, true) and sent[1].body.content:find("`dc_owner`", 1, true))
+				assert(not sent[1].body.content:find("Price", 1, true), "the channel only gets the title")
 				reply({ ok = true, code = 200, data = core.write_json({ id = "55", channel_id = "4242" }) })
 				-- the bot starts the thread on that message
 				assert(#sent == 2, "the thread request follows")
@@ -2858,12 +2860,16 @@ auction_test("discord: in a text channel the bot starts a thread on the opening 
 				assert(sent[2].bot_token == "SECRET.token" and sent[2].body.name:find("^#%d+ Selling: 3x"))
 				assert(not core.write_json(sent[2].body):find("SECRET", 1, true), "the token is not in the body")
 				reply({ ok = true, code = 200, data = core.write_json({ id = "55", type = 11 }) })
-				assert(offer.discord.thread == "55" and offer.discord.from_message and offer.discord.message == "55")
-				-- later posts go into the thread; the opening message is edited in the channel
+				-- the details are posted inside the thread
+				assert(#sent == 3 and sent[3].url == WEBHOOK .. "?wait=true&thread_id=55", sent[3].url)
+				assert(sent[3].body.content:find("Price", 1, true) and sent[3].body.content:find("3x", 1, true))
+				reply({ ok = true, code = 200, data = core.write_json({ id = "66" }) })
+				assert(offer.discord.thread == "55" and offer.discord.head == "55" and offer.discord.message == "66")
+				-- later posts and edits all stay in the thread
 				assert(auction.revoke("dc_owner", offer.id))
-				assert(sent[3].url == WEBHOOK .. "?thread_id=55" and sent[3].body.content:find("TAKEN DOWN", 1, true))
+				assert(sent[4].url == WEBHOOK .. "?thread_id=55" and sent[4].body.content:find("TAKEN DOWN", 1, true))
 				reply({ ok = true, code = 200, data = "{}" })
-				assert(sent[4].method == "PATCH" and sent[4].url == WEBHOOK .. "/messages/55", sent[4].url)
+				assert(sent[5].method == "PATCH" and sent[5].url == WEBHOOK .. "/messages/66?thread_id=55", sent[5].url)
 			end)
 		end)
 	end)
